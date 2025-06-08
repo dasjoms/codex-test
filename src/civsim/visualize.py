@@ -17,6 +17,7 @@ def render_ascii(world: World, entities: List[Entity]) -> str:
             Biome.FOREST: "F",
             Biome.DESERT: "D",
             Biome.WATER: "~",
+            Biome.MOUNTAIN: "^",
         }[biome]
 
     grid = [
@@ -39,6 +40,7 @@ def render_svg(world: World, entities: List[Entity], tile_size: int = 20) -> str
         Biome.FOREST: "#228b22",
         Biome.DESERT: "#e0c469",
         Biome.WATER: "#1e90ff",
+        Biome.MOUNTAIN: "#888888",
     }
     res_colors = {
         Resource.WOOD: "#8b4513",
@@ -96,6 +98,7 @@ def render_vision_ascii(world: World, entity: Entity) -> str:
             Biome.FOREST: "F",
             Biome.DESERT: "D",
             Biome.WATER: "~",
+            Biome.MOUNTAIN: "^",
         }[biome]
 
     grid = [
@@ -125,6 +128,7 @@ def render_memory_ascii(world: World, entity: Entity) -> str:
             Biome.FOREST: "F",
             Biome.DESERT: "D",
             Biome.WATER: "~",
+            Biome.MOUNTAIN: "^",
         }[biome]
 
     grid = [
