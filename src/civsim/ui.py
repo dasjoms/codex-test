@@ -108,6 +108,7 @@ class SimulationUI:
             Biome.FOREST: "#228b22",
             Biome.DESERT: "#e0c469",
             Biome.WATER: "#1e90ff",
+            Biome.MOUNTAIN: "#888888",
         }
         res_colors = {
             Resource.WOOD: "#8b4513",
