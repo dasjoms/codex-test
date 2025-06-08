@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import math
 import random
 from typing import List
 
@@ -15,6 +16,7 @@ class Biome(Enum):
     FOREST = "forest"
     DESERT = "desert"
     WATER = "water"
+    MOUNTAIN = "mountain"
 
 
 class Resource(Enum):
@@ -37,6 +39,7 @@ class Tile:
     """A single map tile."""
 
     biome: Biome
+    elevation: float = 0.0
     resources: dict[Resource, int] = field(default_factory=dict)
 
 
@@ -53,10 +56,17 @@ class World:
         height: int,
         seed: int | None = None,
         biome_scale: int = 5,
-        resource_scale: int = 3,
+        resource_scale: int = 8,
+        region_size: int = 32,
     ) -> None:
         self.width = width
         self.height = height
+        self.region_size = max(
+            1,
+            min(
+                region_size, max(1, width // biome_scale), max(1, height // biome_scale)
+            ),
+        )
         rng = random.Random(seed)
 
         self.tiles = [
@@ -121,7 +131,6 @@ class World:
                 for xx in range(width):
                     self.tiles[yy][xx].biome = new_biomes[yy][xx]
 
-        # place resource nodes in a finer subgrid
         for ry in range(0, height, resource_scale):
             for rx in range(0, width, resource_scale):
                 tx = rng.randrange(rx, min(rx + resource_scale, width))
@@ -188,31 +197,41 @@ class World:
 
         distribution = {
             Biome.FOREST: [
-                (Resource.WOOD, 0.6),
-                (Resource.ANIMAL, 0.2),
+                (Resource.WOOD, 0.9),
+                (Resource.ANIMAL, 0.3),
                 (Resource.STONE, 0.1),
-                (Resource.CLAY, 0.1),
+                (None, 0.2),
             ],
             Biome.PLAINS: [
                 (Resource.FOOD, 0.3),
                 (Resource.WATER, 0.2),
                 (Resource.ANIMAL, 0.2),
-                (Resource.WOOD, 0.15),
+                (Resource.WOOD, 0.1),
                 (Resource.STONE, 0.1),
                 (Resource.IRON, 0.05),
+                (None, 0.3),
             ],
             Biome.DESERT: [
-                (Resource.STONE, 0.3),
+                (Resource.STONE, 0.4),
                 (Resource.CLAY, 0.3),
+                (Resource.IRON, 0.1),
+                (Resource.COPPER, 0.05),
+                (Resource.COAL, 0.05),
+                (Resource.GOLD, 0.05),
+                (Resource.WATER, 0.05),
+                (None, 0.4),
+            ],
+            Biome.MOUNTAIN: [
+                (Resource.STONE, 0.5),
                 (Resource.IRON, 0.15),
                 (Resource.COPPER, 0.1),
                 (Resource.COAL, 0.1),
                 (Resource.GOLD, 0.05),
-                (Resource.WATER, 0.05),
+                (None, 0.5),
             ],
             Biome.WATER: [
-                (Resource.WATER, 0.5),
-                (Resource.ANIMAL, 0.5),
+                (Resource.WATER, 0.6),
+                (Resource.ANIMAL, 0.4),
             ],
         }
 
@@ -224,7 +243,7 @@ class World:
         upto = 0.0
         for res, weight in choices:
             if upto + weight >= r:
-                return res
+                return res  # type: ignore[return-value]
             upto += weight
         return None
 
@@ -238,10 +257,10 @@ class World:
             Resource.CLAY: (2, 5),
             Resource.FOOD: (2, 6),
             Resource.WATER: (1, 3),
-            Resource.IRON: (1, 4),
-            Resource.COPPER: (1, 3),
-            Resource.COAL: (1, 3),
-            Resource.GOLD: (1, 2),
+            Resource.IRON: (1, 3),
+            Resource.COPPER: (1, 2),
+            Resource.COAL: (1, 2),
+            Resource.GOLD: (1, 1),
         }
         low, high = ranges.get(res, (1, 3))
         return rng.randint(low, high)
