@@ -63,13 +63,26 @@ class World:
             [Tile(biome=Biome.PLAINS) for _ in range(width)] for _ in range(height)
         ]
 
-        # generate biomes on a coarse grid
-        for by in range(0, height, biome_scale):
-            for bx in range(0, width, biome_scale):
-                biome = rng.choice(list(Biome))
-                for y in range(by, min(by + biome_scale, height)):
-                    for x in range(bx, min(bx + biome_scale, width)):
-                        self.tiles[y][x].biome = biome
+        # generate a temperature map to guide biome placement
+        temps = [
+            min(1.0, max(0.0, y / height + rng.uniform(-0.1, 0.1)))
+            for y in range(height)
+        ]
+
+        for y in range(height):
+            for x in range(width):
+                neighbors = []
+                if x > 0:
+                    neighbors.append(self.tiles[y][x - 1].biome)
+                if y > 0:
+                    neighbors.append(self.tiles[y - 1][x].biome)
+
+                if neighbors and rng.random() < 0.6:
+                    biome = rng.choice(neighbors)
+                else:
+                    biome = self._biome_from_temperature(temps[y], rng)
+
+                self.tiles[y][x].biome = biome
 
         # place resource nodes in a finer subgrid
         for ry in range(0, height, resource_scale):
@@ -94,6 +107,21 @@ class World:
         if not self.in_bounds(x, y):
             raise IndexError("Coordinates out of bounds")
         return self.tiles[y][x]
+
+    def _biome_from_temperature(self, temp: float, rng: random.Random) -> Biome:
+        """Return a biome type influenced by temperature."""
+
+        if temp < 0.3:
+            choices = [Biome.FOREST, Biome.PLAINS]
+        elif temp < 0.6:
+            choices = [Biome.PLAINS, Biome.FOREST, Biome.DESERT]
+        else:
+            choices = [Biome.DESERT, Biome.PLAINS]
+
+        if rng.random() < 0.05:
+            choices.append(Biome.WATER)
+
+        return rng.choice(choices)
 
     def _choose_resource(self, biome: Biome, rng: random.Random) -> Resource | None:
         """Return a resource type appropriate for the biome or None."""
@@ -144,7 +172,7 @@ class World:
         """Return an amount for the given resource type."""
 
         ranges = {
-            Resource.WOOD: (3, 8),
+            Resource.WOOD: (1, 1),
             Resource.ANIMAL: (1, 3),
             Resource.STONE: (2, 5),
             Resource.CLAY: (2, 5),
