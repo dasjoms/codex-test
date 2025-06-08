@@ -9,30 +9,6 @@ This repository is meant to grow into a life/civilization simulator in Python. T
 - Procedural generation is used to create diverse maps with varying biomes and resources.
 - Decision making for entities is handled via basic AI/state machines, steering behaviours, or similar approaches.
 
-## Initial Design Ideas
-1. **Map Representation**
-   - Start with a grid (2D list) of tiles; each tile stores biome type and resources.
-   - Provide hooks for procedural generation functions to create varied landscapes.
-2. **Entity Model**
-   - Minimal required attributes: `id`, `position`, `health`, `hunger`, `energy`.
-   - Entities can perceive nearby tiles, move, gather resources, and interact with other entities.
-3. **Simulation Loop**
-   - Each tick updates the state of the world and all entities.
-   - Handle resource regeneration, entity movements, and decisions per tick.
-4. **Scalability**
-   - Keep data structures lightweight and consider spatial partitioning (e.g., chunks) if the entity count becomes large.
-5. **Testing and Visualization**
-   - Include unit tests for key components (map generation, entity behaviour). Later, add basic visualization or logging to track the simulation over time.
-
-## To‑Do List
-- [ ] Set up a `src` package for Python modules.
-- [ ] Implement world/map generation with at least two biomes.
-- [ ] Create an `Entity` class with parameters for health and decision-making.
-- [ ] Build the main simulation loop.
-- [ ] Develop simple decision logic for entities to move and gather resources.
-- [ ] Add unit tests using `pytest`.
-- [ ] Provide example scripts to run a basic simulation.
-- [ ] Optionally integrate visualization (ASCII or graphical) to observe simulation progress.
 
 ## Development Environment
 - Python 3.10 or higher is recommended.
