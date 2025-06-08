@@ -73,64 +73,63 @@ class World:
             [Tile(biome=Biome.PLAINS) for _ in range(width)] for _ in range(height)
         ]
 
-        reg_w = math.ceil(width / self.region_size)
-        reg_h = math.ceil(height / self.region_size)
-
-        temps = [
-            min(1.0, max(0.0, ry / reg_h + rng.uniform(-0.1, 0.1)))
-            for ry in range(reg_h)
+        # generate temperature and moisture maps for realistic biomes
+        temp_map = [
+            [
+                min(1.0, max(0.0, y / (height - 1) + rng.uniform(-0.2, 0.2)))
+                for _ in range(width)
+            ]
+            for y in range(height)
+        ]
+        moist_map = [
+            [min(1.0, max(0.0, 0.5 + rng.uniform(-0.3, 0.3))) for _ in range(width)]
+            for _ in range(height)
         ]
 
-        region_biomes: List[List[Biome]] = [
-            [Biome.PLAINS for _ in range(reg_w)] for _ in range(reg_h)
-        ]
-        region_elev: List[List[float]] = [
-            [rng.random() for _ in range(reg_w)] for _ in range(reg_h)
-        ]
+        def _smooth(grid: list[list[float]]) -> list[list[float]]:
+            out = [[0.0 for _ in range(width)] for _ in range(height)]
+            for yy in range(height):
+                for xx in range(width):
+                    total = grid[yy][xx]
+                    count = 1
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        nx, ny = xx + dx, yy + dy
+                        if 0 <= nx < width and 0 <= ny < height:
+                            total += grid[ny][nx]
+                            count += 1
+                    out[yy][xx] = total / count
+            return out
 
-        for ry in range(reg_h):
-            for rx in range(reg_w):
-                neighbors = []
-                if rx > 0:
-                    neighbors.append(region_biomes[ry][rx - 1])
-                if ry > 0:
-                    neighbors.append(region_biomes[ry - 1][rx])
-
-                base_elev = region_elev[ry][rx]
-                if neighbors and rng.random() < 0.6:
-                    biome = rng.choice(neighbors)
-                else:
-                    biome = self._biome_from_climate(temps[ry], base_elev, rng)
-
-                region_biomes[ry][rx] = biome
-
-                for y in range(
-                    ry * self.region_size, min((ry + 1) * self.region_size, height)
-                ):
-                    for x in range(
-                        rx * self.region_size, min((rx + 1) * self.region_size, width)
-                    ):
-                        elev = min(1.0, max(0.0, base_elev + rng.uniform(-0.05, 0.05)))
-                        self.tiles[y][x].elevation = elev
-                        self.tiles[y][x].biome = (
-                            Biome.MOUNTAIN if elev > 0.85 else biome
-                        )
-
-        needed = {Biome.PLAINS, Biome.FOREST, Biome.DESERT, Biome.WATER}
-        present = {tile.biome for row in self.tiles for tile in row}
-        for missing in needed - present:
-            x = rng.randrange(width)
-            y = rng.randrange(height)
-            self.tiles[y][x].biome = missing
+        for _ in range(2):
+            temp_map = _smooth(temp_map)
+            moist_map = _smooth(moist_map)
 
         for y in range(height):
             for x in range(width):
-                tile = self.tiles[y][x]
-                if tile.biome == Biome.FOREST and rng.random() < 0.7:
-                    amt = rng.randint(3, 7)
-                    tile.resources[Resource.WOOD] = (
-                        tile.resources.get(Resource.WOOD, 0) + amt
-                    )
+                temp = temp_map[y][x]
+                moist = moist_map[y][x]
+                biome = self._biome_from_climate(temp, moist, rng)
+                self.tiles[y][x].biome = biome
+
+        # second pass to smooth biome edges
+        for _ in range(2):
+            new_biomes = [[tile.biome for tile in row] for row in self.tiles]
+            for yy in range(height):
+                for xx in range(width):
+                    if self.tiles[yy][xx].biome in (Biome.WATER, Biome.DESERT):
+                        new_biomes[yy][xx] = self.tiles[yy][xx].biome
+                        continue
+                    counts: dict[Biome, int] = {}
+                    for dy in (-1, 0, 1):
+                        for dx in (-1, 0, 1):
+                            nx, ny = xx + dx, yy + dy
+                            if 0 <= nx < width and 0 <= ny < height:
+                                b = self.tiles[ny][nx].biome
+                                counts[b] = counts.get(b, 0) + 1
+                    new_biomes[yy][xx] = max(counts, key=counts.get)
+            for yy in range(height):
+                for xx in range(width):
+                    self.tiles[yy][xx].biome = new_biomes[yy][xx]
 
         for ry in range(0, height, resource_scale):
             for rx in range(0, width, resource_scale):
@@ -156,7 +155,7 @@ class World:
         return self.tiles[y][x]
 
     def _biome_from_temperature(self, temp: float, rng: random.Random) -> Biome:
-        """Return a biome type influenced by temperature (legacy)."""
+        """Return a biome type influenced by temperature."""
 
         if temp < 0.3:
             choices = [Biome.FOREST, Biome.PLAINS]
@@ -171,24 +170,27 @@ class World:
         return rng.choice(choices)
 
     def _biome_from_climate(
-        self, temp: float, elevation: float, rng: random.Random
+        self, temp: float, moist: float, rng: random.Random
     ) -> Biome:
-        """Return a biome given temperature and elevation."""
+        """Return a biome based on temperature and moisture values."""
 
-        if elevation > 0.8:
-            return Biome.MOUNTAIN
+        if moist > 0.8 or rng.random() < 0.03:
+            return Biome.WATER
+        if rng.random() < 0.05:
+            return Biome.DESERT
 
         if temp < 0.3:
-            choices = [Biome.FOREST, Biome.PLAINS]
-        elif temp < 0.6:
-            choices = [Biome.PLAINS, Biome.FOREST, Biome.DESERT]
-        else:
-            choices = [Biome.DESERT, Biome.PLAINS]
+            return Biome.FOREST if moist > 0.4 else Biome.PLAINS
+        if temp < 0.6:
+            if moist < 0.3:
+                return Biome.DESERT
+            if moist > 0.6:
+                return Biome.FOREST
+            return Biome.PLAINS
 
-        if rng.random() < 0.05:
-            choices.append(Biome.WATER)
-
-        return rng.choice(choices)
+        if moist < 0.4:
+            return Biome.DESERT
+        return Biome.PLAINS
 
     def _choose_resource(self, biome: Biome, rng: random.Random) -> Resource | None:
         """Return a resource type appropriate for the biome or None."""
@@ -249,7 +251,7 @@ class World:
         """Return an amount for the given resource type."""
 
         ranges = {
-            Resource.WOOD: (3, 7),
+            Resource.WOOD: (1, 1),
             Resource.ANIMAL: (1, 3),
             Resource.STONE: (2, 5),
             Resource.CLAY: (2, 5),

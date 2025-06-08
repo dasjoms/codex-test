@@ -54,6 +54,18 @@ def render_svg(world: World, entities: List[Entity], tile_size: int = 20) -> str
         Resource.GOLD: "#ffd700",
         Resource.COAL: "#2f4f4f",
     }
+    res_colors = {
+        Resource.WOOD: "#8b4513",
+        Resource.STONE: "#808080",
+        Resource.CLAY: "#b5651d",
+        Resource.WATER: "#00bfff",
+        Resource.FOOD: "#ff6347",
+        Resource.ANIMAL: "#fafad2",
+        Resource.IRON: "#b0b0b0",
+        Resource.COPPER: "#b87333",
+        Resource.GOLD: "#ffd700",
+        Resource.COAL: "#2f4f4f",
+    }
     width_px = world.width * tile_size
     height_px = world.height * tile_size
     parts = [
