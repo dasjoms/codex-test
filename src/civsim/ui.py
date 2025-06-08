@@ -7,7 +7,7 @@ from typing import Optional
 
 from .simulation import Simulation
 from .entity import Entity
-from .world import Biome
+from .world import Biome, Resource
 
 
 class SimulationUI:
@@ -54,6 +54,7 @@ class SimulationUI:
         self.pause_button.pack(anchor="nw", pady=4)
 
         self.selected: Optional[Entity] = None
+        self.selected_tile: Optional[tuple[int, int]] = None
         self.canvas.bind("<Button-1>", self.on_click)
 
     def run(self) -> None:
@@ -81,9 +82,11 @@ class SimulationUI:
         for ent in self.sim.entities:
             if ent.x == x and ent.y == y:
                 self.selected = ent
+                self.selected_tile = None
                 break
         else:
             self.selected = None
+            self.selected_tile = (x, y)
         self.redraw()
 
     def update(self) -> None:
@@ -106,6 +109,18 @@ class SimulationUI:
             Biome.DESERT: "#e0c469",
             Biome.WATER: "#1e90ff",
         }
+        res_colors = {
+            Resource.WOOD: "#8b4513",
+            Resource.STONE: "#808080",
+            Resource.CLAY: "#b5651d",
+            Resource.WATER: "#00bfff",
+            Resource.FOOD: "#ff6347",
+            Resource.ANIMAL: "#fafad2",
+            Resource.IRON: "#b0b0b0",
+            Resource.COPPER: "#b87333",
+            Resource.GOLD: "#ffd700",
+            Resource.COAL: "#2f4f4f",
+        }
         for y in range(world.height):
             for x in range(world.width):
                 tile = world.tiles[y][x]
@@ -122,9 +137,9 @@ class SimulationUI:
                     cx = x * ts + ts // 2
                     cy = y * ts + ts // 2
                     r = ts // 6
-                    self.canvas.create_oval(
-                        cx - r, cy - r, cx + r, cy + r, fill="yellow"
-                    )
+                    res = next(iter(tile.resources))
+                    rc = res_colors.get(res, "yellow")
+                    self.canvas.create_oval(cx - r, cy - r, cx + r, cy + r, fill=rc)
 
         if self.selected:
             self.draw_overlays(self.selected)
@@ -175,6 +190,19 @@ class SimulationUI:
     def update_info(self) -> None:
         """Update the info panel for the currently selected entity."""
 
+        if self.selected is None and self.selected_tile is not None:
+            x, y = self.selected_tile
+            tile = self.sim.world.get_tile(x, y)
+            if tile.resources:
+                res_text = ", ".join(
+                    f"{res.name}: {amt}" for res, amt in tile.resources.items()
+                )
+                self.info_var.set(
+                    f"Tile ({x}, {y})\nBiome: {tile.biome.value}\n{res_text}"
+                )
+            else:
+                self.info_var.set(f"Tile ({x}, {y})\nBiome: {tile.biome.value}\nEmpty")
+            return
         if not self.selected:
             self.info_var.set("Select an entity")
             return

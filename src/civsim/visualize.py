@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List
 
 from .entity import Entity
-from .world import World, Biome
+from .world import World, Biome, Resource
 
 
 def render_ascii(world: World, entities: List[Entity]) -> str:
@@ -40,6 +40,18 @@ def render_svg(world: World, entities: List[Entity], tile_size: int = 20) -> str
         Biome.DESERT: "#e0c469",
         Biome.WATER: "#1e90ff",
     }
+    res_colors = {
+        Resource.WOOD: "#8b4513",
+        Resource.STONE: "#808080",
+        Resource.CLAY: "#b5651d",
+        Resource.WATER: "#00bfff",
+        Resource.FOOD: "#ff6347",
+        Resource.ANIMAL: "#fafad2",
+        Resource.IRON: "#b0b0b0",
+        Resource.COPPER: "#b87333",
+        Resource.GOLD: "#ffd700",
+        Resource.COAL: "#2f4f4f",
+    }
     width_px = world.width * tile_size
     height_px = world.height * tile_size
     parts = [
@@ -57,7 +69,9 @@ def render_svg(world: World, entities: List[Entity], tile_size: int = 20) -> str
                 r = tile_size // 6
                 cx = x * tile_size + tile_size // 2
                 cy = y * tile_size + tile_size // 2
-                parts.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#ffd700" />')
+                res = next(iter(tile.resources))
+                rc = res_colors.get(res, "#ffd700")
+                parts.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{rc}" />')
 
     for e in entities:
         if world.in_bounds(e.x, e.y):
