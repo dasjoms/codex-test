@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Dict, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
-from .world import World, Resource
+from .world import World, Resource, Tile
+from .actions import Action, GatherAction, MoveAction, MoveToAction, RestAction
 
 
 @dataclass
@@ -19,6 +20,7 @@ class Needs:
     thirst: int = 0
     energy: int = 100
     morale: int = 50
+    loneliness: int = 0
     injuries: int = 0
 
 
@@ -80,6 +82,7 @@ class Entity:
     memory: Set[Tuple[int, int]] = field(default_factory=set)
     relationships: Dict[int, str] = field(default_factory=dict)
     last_reproduced: int = -9999
+    current_action: Optional[Action] = None
 
     def perceive(self, world: World) -> None:
         """Add visible tiles to memory based on perception range."""
@@ -104,22 +107,65 @@ class Entity:
             occupied = set()
 
         nx, ny = self.x + dx, self.y + dy
-        if world.in_bounds(nx, ny) and (nx, ny) not in occupied:
+        if (
+            world.in_bounds(nx, ny)
+            and (nx, ny) not in occupied
+            and world.get_tile(nx, ny).walkable
+        ):
             self.x, self.y = nx, ny
             return True
         return False
 
-    def gather(self, world: World) -> None:
-        """Gather one resource from the current tile if available."""
+    def remembered_tile_with_resource(
+        self, world: World, resource: Resource
+    ) -> Tuple[int, int] | None:
+        """Return coordinates of a remembered tile containing the resource."""
 
-        tile = world.get_tile(self.x, self.y)
-        if not tile.resources:
+        for x, y in sorted(self.memory):
+            if not world.in_bounds(x, y):
+                continue
+            tile = world.get_tile(x, y)
+            if resource in tile.resources:
+                return x, y
+        return None
+
+    def remembered_adjacent_tile_for_resource(
+        self, world: World, resource: Resource
+    ) -> Tuple[int, int] | None:
+        """Return a walkable tile adjacent to a remembered resource."""
+
+        for x, y in self.memory:
+            if not world.in_bounds(x, y):
+                continue
+            tile = world.get_tile(x, y)
+            if resource not in tile.resources:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if world.in_bounds(nx, ny) and world.get_tile(nx, ny).walkable:
+                    return nx, ny
+        return None
+
+    def gather(self, world: World) -> None:
+        """Gather a resource from an adjacent non-walkable tile."""
+
+        sources: list[Tuple[Tile, Tuple[int, int]]] = []
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = self.x + dx, self.y + dy
+            if not world.in_bounds(nx, ny):
+                continue
+            t = world.get_tile(nx, ny)
+            if t.resources:
+                sources.append((t, (nx, ny)))
+        if not sources:
             return
 
+        tile, _ = random.choice(sources)
         res = random.choice(list(tile.resources.keys()))
         tile.resources[res] -= 1
         if tile.resources[res] <= 0:
             del tile.resources[res]
+            tile.walkable = True
         self.inventory.add(res)
         if self.needs.hunger > 0:
             self.needs.hunger = max(0, self.needs.hunger - 1)
@@ -132,11 +178,36 @@ class Entity:
         self.needs.energy = min(100, self.needs.energy + 20)
         self.needs.hunger += 1
         self.needs.thirst += 1
+        self.needs.morale = min(100, self.needs.morale + 1)
 
     def add_relationship(self, other: "Entity", kind: str) -> None:
         """Record a relationship with another entity."""
 
         self.relationships[other.id] = kind
+
+    def plan_action(self, world: World) -> Action:
+        """Select the next action based on needs and memory."""
+
+        if self.needs.energy <= 20:
+            return RestAction()
+
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        for dx, dy in directions:
+            nx, ny = self.x + dx, self.y + dy
+            if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
+                return GatherAction()
+
+        if self.needs.hunger >= 10:
+            loc = self.remembered_adjacent_tile_for_resource(world, Resource.FOOD)
+            if loc:
+                return MoveToAction(target=loc)
+
+        if self.needs.loneliness >= 8:
+            dx, dy = random.choice(directions)
+            return MoveAction(dx, dy)
+
+        dx, dy = random.choice(directions)
+        return MoveAction(dx, dy)
 
     def can_reproduce(
         self,
@@ -187,7 +258,7 @@ class Entity:
     def take_turn(
         self, world: World, occupied: Set[Tuple[int, int]] | None = None
     ) -> None:
-        """Perform a simple turn: update needs then act."""
+        """Update needs, decide on an action, and perform it."""
 
         if occupied is None:
             occupied = set()
@@ -196,6 +267,11 @@ class Entity:
         self.needs.hunger += 1
         self.needs.thirst += 1
         self.needs.energy -= 1
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        if any((self.x + dx, self.y + dy) in occupied for dx, dy in directions):
+            self.needs.loneliness = max(0, self.needs.loneliness - 2)
+        else:
+            self.needs.loneliness += 1
 
         self.memory.add((self.x, self.y))
         self.perceive(world)
@@ -204,18 +280,22 @@ class Entity:
             self.needs.health = max(0, self.needs.health - 5)
             self.needs.injuries += 1
 
+        if (
+            self.needs.hunger > 10
+            or self.needs.thirst > 10
+            or self.needs.loneliness > 5
+        ):
+            self.needs.morale = max(0, self.needs.morale - 1)
+        else:
+            self.needs.morale = min(100, self.needs.morale + 1)
+
         if self.age >= self.max_age:
             self.needs.health = 0
 
-        if self.needs.energy <= 0:
-            self.rest()
-            return
+        if self.current_action is None or self.current_action.finished:
+            self.current_action = self.plan_action(world)
+            self.current_action.start(self, world)
 
-        directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
-        random.shuffle(directions)
-        for dx, dy in directions:
-            if self.move(dx, dy, world, occupied):
-                break
+        self.current_action.step(self, world, occupied)
         self.memory.add((self.x, self.y))
         self.perceive(world)
-        self.gather(world)

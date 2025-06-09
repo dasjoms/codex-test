@@ -1,21 +1,20 @@
 from civsim.entity import Entity, ReproductionRules
 from civsim.world import World, Resource
+from civsim.simulation import Simulation
 
 
 def test_entity_movement_and_gathering() -> None:
     world = World(width=3, height=3, seed=2)
     entity = Entity(id=1, x=1, y=1)
-    tile = world.get_tile(1, 1)
+    tile = world.get_tile(1, 2)
     tile.resources.clear()
     tile.resources[Resource.WOOD] = 1
+    tile.walkable = False
 
-    entity.move(1, 0, world)
-    assert (entity.x, entity.y) in [(2, 1), (1, 1)]  # move stays in bounds
-
-    entity.x, entity.y = 1, 1
     entity.gather(world)
     assert entity.inventory.items[Resource.WOOD] == 1
     assert not tile.resources
+    assert tile.walkable
 
 
 def test_entity_needs_update_and_rest() -> None:
@@ -63,3 +62,33 @@ def test_can_reproduce_rules() -> None:
 
     entity.age = rules.min_age - 1
     assert not entity.can_reproduce(rules, 0)
+
+
+def test_loneliness_updates_with_neighbors() -> None:
+    world = World(width=3, height=3, seed=1)
+    e1 = Entity(id=1, x=1, y=1)
+    e2 = Entity(id=2, x=2, y=1)
+    sim = Simulation(world=world, entities=[e1, e2])
+    sim.step()  # both start adjacent, should decrease loneliness for e1
+    assert e1.needs.loneliness == 0
+    sim.entities.pop()  # remove e2
+    sim.step()
+    assert e1.needs.loneliness == 1
+
+
+def test_entity_moves_to_remembered_resource() -> None:
+    world = World(width=3, height=2, seed=1)
+    tile = world.get_tile(2, 0)
+    tile.resources.clear()
+    tile.resources[Resource.FOOD] = 1
+    tile.walkable = False
+
+    e = Entity(id=1, x=0, y=0)
+    e.memory.update({(0, 0), (1, 0), (2, 0)})
+    e.needs.hunger = 15
+
+    for _ in range(3):
+        e.take_turn(world)
+
+    assert (e.x, e.y) == (1, 0)
+    assert Resource.FOOD in e.inventory.items

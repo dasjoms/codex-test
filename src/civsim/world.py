@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-import math
 import random
 from typing import List
 
@@ -41,6 +40,7 @@ class Tile:
     biome: Biome
     elevation: float = 0.0
     resources: dict[Resource, int] = field(default_factory=dict)
+    walkable: bool = True
 
 
 class World:
@@ -109,7 +109,9 @@ class World:
                 temp = temp_map[y][x]
                 moist = moist_map[y][x]
                 biome = self._biome_from_climate(temp, moist, rng)
-                self.tiles[y][x].biome = biome
+                tile = self.tiles[y][x]
+                tile.biome = biome
+                tile.walkable = biome not in (Biome.WATER, Biome.MOUNTAIN)
 
         # second pass to smooth biome edges
         for _ in range(2):
@@ -141,6 +143,7 @@ class World:
                     continue
                 amount = self._resource_amount(res_type, rng)
                 tile.resources[res_type] = tile.resources.get(res_type, 0) + amount
+                tile.walkable = False
 
     def in_bounds(self, x: int, y: int) -> bool:
         """Return True if the coordinates are inside the map."""
