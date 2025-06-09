@@ -39,6 +39,10 @@ class SimulationUI:
 
         control = tk.Frame(self.root)
         control.pack(side="right", fill="both", expand=True)
+        self.summary_var = tk.StringVar(value="")
+        tk.Label(control, textvariable=self.summary_var, justify="left").pack(
+            anchor="nw"
+        )
         self.info_var = tk.StringVar(value="Select an entity")
         tk.Label(control, textvariable=self.info_var, justify="left").pack(anchor="nw")
         self.show_memory = tk.BooleanVar(value=False)
@@ -59,6 +63,10 @@ class SimulationUI:
             control, text="Pause", command=self.toggle_running
         )
         self.pause_button.pack(anchor="nw", pady=4)
+
+        tk.Label(control, text="Action Log:").pack(anchor="nw")
+        self.log_box = tk.Listbox(control, height=10)
+        self.log_box.pack(anchor="nw", fill="both", expand=True)
 
         self.selected: Optional[Entity] = None
         self.selected_tile: Optional[tuple[int, int]] = None
@@ -192,6 +200,9 @@ class SimulationUI:
 
     def update_info(self) -> None:
         """Update the info panel for the currently selected entity."""
+        self.summary_var.set(
+            f"Tick: {self.sim.tick}\nEntities: {len(self.sim.entities)}\nCommunities: {len(self.sim.world.communities)}"
+        )
 
         if self.selected is None and self.selected_tile is not None:
             x, y = self.selected_tile
@@ -205,11 +216,15 @@ class SimulationUI:
                 )
             else:
                 self.info_var.set(f"Tile ({x}, {y})\nBiome: {tile.biome.value}\nEmpty")
+            self.log_box.delete(0, tk.END)
             return
         if not self.selected:
             self.info_var.set("Select an entity")
+            self.log_box.delete(0, tk.END)
             return
+
         n = self.selected.needs
+        t = self.selected.traits
         text = (
             f"Entity {self.selected.id}\n"
             f"Pos: ({self.selected.x}, {self.selected.y})\n"
@@ -217,6 +232,17 @@ class SimulationUI:
             f"Hunger: {n.hunger}\n"
             f"Thirst: {n.thirst}\n"
             f"Energy: {n.energy}\n"
-            f"Inventory: {self.selected.inventory}"
+            f"Morale: {n.morale}\n"
+            f"Loneliness: {n.loneliness}\n"
+            f"Inventory: {self.selected.inventory}\n"
+            f"Traits: S{t.strength} A{t.agility} I{t.intelligence} P{t.perception}"
         )
+        if self.selected.community_id is not None:
+            text += f"\nCommunity: {self.selected.community_id}"
+        if self.selected.home_id is not None:
+            text += f"\nHome: {self.selected.home_id}"
         self.info_var.set(text)
+
+        self.log_box.delete(0, tk.END)
+        for entry in self.selected.action_log[-10:]:
+            self.log_box.insert(tk.END, entry)

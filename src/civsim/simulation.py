@@ -49,7 +49,7 @@ class Simulation:
             if occupied[pos] == 0:
                 del occupied[pos]
 
-            entity.take_turn(self.world, set(occupied.keys()))
+            entity.take_turn(self.world, set(occupied.keys()), tick=self.tick)
             if entity.home_id is not None:
                 entity.needs.morale = min(100, entity.needs.morale + 1)
 
