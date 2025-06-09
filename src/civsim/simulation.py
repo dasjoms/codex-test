@@ -50,6 +50,8 @@ class Simulation:
                 del occupied[pos]
 
             entity.take_turn(self.world, set(occupied.keys()))
+            if entity.home_id is not None:
+                entity.needs.morale = min(100, entity.needs.morale + 1)
 
             if entity.needs.health > 0:
                 pos = (entity.x, entity.y)
@@ -58,4 +60,55 @@ class Simulation:
 
         self.entities = alive_entities
         self.entities.extend(new_entities)
+        self._complete_construction()
+        self._share_house_memory()
         self.tick += 1
+
+    def _share_house_memory(self) -> None:
+        """Share map knowledge between housemates and nearby houses."""
+
+        ent_map = {e.id: e for e in self.entities}
+        houses = [b for b in self.world.buildings if b.occupant_limit > 0]
+
+        for house in houses:
+            mem_union: set[tuple[int, int]] = set()
+            for eid in house.occupant_ids:
+                if eid in ent_map:
+                    mem_union |= ent_map[eid].memory
+            for eid in house.occupant_ids:
+                if eid in ent_map:
+                    ent_map[eid].memory |= mem_union
+
+        for i, h1 in enumerate(houses):
+            for h2 in houses[i + 1 :]:
+                if max(abs(h1.x - h2.x), abs(h1.y - h2.y)) <= 5:
+                    mem_union = set()
+                    for eid in h1.occupant_ids + h2.occupant_ids:
+                        if eid in ent_map:
+                            mem_union |= ent_map[eid].memory
+                    for eid in h1.occupant_ids + h2.occupant_ids:
+                        if eid in ent_map:
+                            ent_map[eid].memory |= mem_union
+
+    def _complete_construction(self) -> None:
+        """Finalize finished construction sites and reward builders."""
+
+        ent_map = {e.id: e for e in self.entities}
+        for site in list(self.world.construction_sites):
+            if not site.built or site.building is None:
+                continue
+            building = site.building
+            for eid in site.participants:
+                ent = ent_map.get(eid)
+                if ent is None:
+                    continue
+                ent.skills.construction += 1
+                for attr, bonus in site.blueprint.bonuses.items():
+                    if hasattr(ent.needs, attr):
+                        setattr(ent.needs, attr, getattr(ent.needs, attr) + bonus)
+                    elif hasattr(ent.traits, attr):
+                        setattr(ent.traits, attr, getattr(ent.traits, attr) + bonus)
+                if building.occupant_limit:
+                    if building.add_occupant(ent.id):
+                        ent.home_id = building.id
+            self.world.construction_sites.remove(site)

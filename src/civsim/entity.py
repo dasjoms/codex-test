@@ -6,7 +6,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
-from .world import World, Resource, Tile
+from .world import World, Resource, Tile, Building, Blueprint
 from .actions import (
     Action,
     GatherAction,
@@ -14,6 +14,7 @@ from .actions import (
     MoveToAction,
     RestAction,
     ConsumeAction,
+    BuildAction,
 )
 
 
@@ -75,6 +76,13 @@ class Inventory:
 
 
 @dataclass
+class Skills:
+    """Skill levels improved through actions."""
+
+    construction: int = 0
+
+
+@dataclass
 class Entity:
     """A basic entity living in the world with simple needs."""
 
@@ -86,10 +94,12 @@ class Entity:
     age: int = 0
     max_age: int = 100
     inventory: Inventory = field(default_factory=Inventory)
+    skills: Skills = field(default_factory=Skills)
     memory: Set[Tuple[int, int]] = field(default_factory=set)
     relationships: Dict[int, str] = field(default_factory=dict)
     last_reproduced: int = -9999
     current_action: Optional[Action] = None
+    home_id: Optional[int] = None
 
     def perceive(self, world: World) -> None:
         """Add visible tiles to memory based on perception range."""
@@ -215,6 +225,14 @@ class Entity:
 
         self.relationships[other.id] = kind
 
+    def bind_to_house(self, building: Building) -> bool:
+        """Attempt to join the given house."""
+
+        if not building.add_occupant(self.id):
+            return False
+        self.home_id = building.id
+        return True
+
     def plan_action(self, world: World) -> Action:
         """Select the next action based on needs and memory."""
 
@@ -237,6 +255,28 @@ class Entity:
             for food in (Resource.MEAT, Resource.BERRIES):
                 if self.inventory.items.get(food, 0) > 0:
                     return ConsumeAction(food)
+
+        house_bp = Blueprint(
+            name="house",
+            width=2,
+            height=2,
+            cost={Resource.WOOD: 4},
+            bonuses={"morale": 5},
+            occupant_limit=4,
+            build_time=5,
+        )
+        if (
+            self.inventory.items.get(Resource.WOOD, 0) >= 4
+            and self.needs.energy > 80
+            and world.can_place_building(
+                self.x, self.y, house_bp.width, house_bp.height
+            )
+        ):
+            return BuildAction(house_bp, self.x, self.y)
+
+        for site in world.construction_sites:
+            if not site.built and max(abs(site.x - self.x), abs(site.y - self.y)) <= 1:
+                return BuildAction(site.blueprint, site.x, site.y)
 
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         for dx, dy in directions:

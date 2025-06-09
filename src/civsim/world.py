@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 import random
-from typing import List
+from typing import List, Optional
 
 
 class Biome(Enum):
@@ -44,6 +44,63 @@ class Tile:
     resources: dict[Resource, int] = field(default_factory=dict)
     walkable: bool = True
     regrow: dict[Resource, int] = field(default_factory=dict)
+    building_id: Optional[int] = None
+
+
+@dataclass
+class Blueprint:
+    """Recipe for constructing a building."""
+
+    name: str
+    width: int
+    height: int
+    cost: dict[Resource, int]
+    bonuses: dict[str, int] = field(default_factory=dict)
+    occupant_limit: int = 0
+    build_time: int = 5
+
+
+@dataclass
+class Building:
+    """Structure occupying multiple tiles."""
+
+    id: int
+    x: int
+    y: int
+    width: int
+    height: int
+    name: str = "building"
+    occupant_limit: int = 0
+    occupant_ids: list[int] = field(default_factory=list)
+
+    def add_occupant(self, entity_id: int) -> bool:
+        """Add an entity to the building if capacity allows."""
+
+        if self.occupant_limit and len(self.occupant_ids) >= self.occupant_limit:
+            return False
+        if entity_id not in self.occupant_ids:
+            self.occupant_ids.append(entity_id)
+        return True
+
+    def remove_occupant(self, entity_id: int) -> None:
+        """Remove an entity from the building."""
+
+        if entity_id in self.occupant_ids:
+            self.occupant_ids.remove(entity_id)
+
+
+@dataclass
+class ConstructionSite:
+    """A shared project tracking construction progress."""
+
+    blueprint: Blueprint
+    x: int
+    y: int
+    progress: int = 0
+    required: int = 5
+    participants: set[int] = field(default_factory=set)
+    built: bool = False
+    building: Building | None = None
 
 
 class World:
@@ -52,6 +109,7 @@ class World:
     width: int
     height: int
     tiles: List[List[Tile]]
+    buildings: List[Building]
 
     def __init__(
         self,
@@ -61,6 +119,7 @@ class World:
         biome_scale: int = 5,
         resource_scale: int = 8,
         region_size: int = 32,
+        climate_scale: int = 10,
     ) -> None:
         self.width = width
         self.height = height
@@ -75,18 +134,49 @@ class World:
         self.tiles = [
             [Tile(biome=Biome.PLAINS) for _ in range(width)] for _ in range(height)
         ]
+        self.buildings = []
+        self.construction_sites: list[ConstructionSite] = []
 
         # generate temperature and moisture maps for realistic biomes
+        coarse_w = max(1, width // climate_scale)
+        coarse_h = max(1, height // climate_scale)
+        temp_offset = [
+            [rng.uniform(-0.2, 0.2) for _ in range(coarse_w)] for _ in range(coarse_h)
+        ]
+        moist_offset = [
+            [rng.uniform(-0.3, 0.3) for _ in range(coarse_w)] for _ in range(coarse_h)
+        ]
         temp_map = [
             [
-                min(1.0, max(0.0, y / (height - 1) + rng.uniform(-0.2, 0.2)))
-                for _ in range(width)
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        y / (height - 1)
+                        + temp_offset[min(y // climate_scale, coarse_h - 1)][
+                            min(x // climate_scale, coarse_w - 1)
+                        ],
+                    ),
+                )
+                for x in range(width)
             ]
             for y in range(height)
         ]
         moist_map = [
-            [min(1.0, max(0.0, 0.5 + rng.uniform(-0.3, 0.3))) for _ in range(width)]
-            for _ in range(height)
+            [
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        0.5
+                        + moist_offset[min(y // climate_scale, coarse_h - 1)][
+                            min(x // climate_scale, coarse_w - 1)
+                        ],
+                    ),
+                )
+                for x in range(width)
+            ]
+            for y in range(height)
         ]
 
         def _smooth(grid: list[list[float]]) -> list[list[float]]:
@@ -293,3 +383,107 @@ class World:
                         tile.resources[res] = 1
                         tile.walkable = False
                         del tile.regrow[res]
+
+    # ------------------------------------------------------------------
+    # Building management
+    # ------------------------------------------------------------------
+    def can_place_building(self, x: int, y: int, width: int, height: int) -> bool:
+        """Return True if a building of the given size can be placed."""
+
+        for dy in range(height):
+            for dx in range(width):
+                tx, ty = x + dx, y + dy
+                if not self.in_bounds(tx, ty):
+                    return False
+                tile = self.tiles[ty][tx]
+                if not tile.walkable or tile.building_id is not None:
+                    return False
+        return True
+
+    def place_building(self, building: Building) -> bool:
+        """Place a building on the map if possible."""
+
+        if not self.can_place_building(
+            building.x, building.y, building.width, building.height
+        ):
+            return False
+
+        building.id = len(self.buildings)
+        self.buildings.append(building)
+        for dy in range(building.height):
+            for dx in range(building.width):
+                tile = self.tiles[building.y + dy][building.x + dx]
+                tile.building_id = building.id
+                tile.walkable = False
+        return True
+
+    def remove_building(self, building: Building) -> None:
+        """Remove a building and free its tiles."""
+
+        if building not in self.buildings:
+            return
+        self.buildings.remove(building)
+        for dy in range(building.height):
+            for dx in range(building.width):
+                if not self.in_bounds(building.x + dx, building.y + dy):
+                    continue
+                tile = self.tiles[building.y + dy][building.x + dx]
+                if tile.building_id == building.id:
+                    tile.building_id = None
+                    tile.walkable = True
+
+    # ------------------------------------------------------------------
+    # Construction projects
+    # ------------------------------------------------------------------
+    def get_construction_site(self, x: int, y: int) -> ConstructionSite | None:
+        """Return the construction site at the given location if present."""
+
+        for site in self.construction_sites:
+            if site.x == x and site.y == y:
+                return site
+        return None
+
+    def start_construction(
+        self, blueprint: Blueprint, x: int, y: int
+    ) -> ConstructionSite | None:
+        """Create a new construction site if the area is free."""
+
+        if not self.can_place_building(x, y, blueprint.width, blueprint.height):
+            return None
+        site = ConstructionSite(
+            blueprint=blueprint, x=x, y=y, required=blueprint.build_time
+        )
+        self.construction_sites.append(site)
+        for dy in range(blueprint.height):
+            for dx in range(blueprint.width):
+                tile = self.tiles[y + dy][x + dx]
+                tile.walkable = False
+        return site
+
+    def advance_construction(self, site: ConstructionSite, entity_id: int) -> bool:
+        """Advance work on the site and return True when completed."""
+
+        site.participants.add(entity_id)
+        if site.built:
+            return True
+        site.progress += 1
+        if site.progress >= site.required:
+            building = Building(
+                id=-1,
+                x=site.x,
+                y=site.y,
+                width=site.blueprint.width,
+                height=site.blueprint.height,
+                name=site.blueprint.name,
+                occupant_limit=site.blueprint.occupant_limit,
+            )
+            building.id = len(self.buildings)
+            self.buildings.append(building)
+            for dy in range(building.height):
+                for dx in range(building.width):
+                    tile = self.tiles[building.y + dy][building.x + dx]
+                    tile.building_id = building.id
+                    tile.walkable = False
+            site.built = True
+            site.building = building
+        return site.built

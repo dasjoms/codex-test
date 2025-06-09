@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
     from .entity import Entity
 
-from .world import World, Resource
+from .world import World, Resource, Blueprint, ConstructionSite
 
 
 class Action:
@@ -144,3 +144,45 @@ class ConsumeAction(Action):
     ) -> None:
         entity.consume(self.resource)
         self.finished = True
+
+
+@dataclass
+class BuildAction(Action):
+    """Construct a building using a blueprint."""
+
+    blueprint: Blueprint
+    x: int
+    y: int
+    site: ConstructionSite | None = None
+
+    def start(self, entity: "Entity", world: World) -> None:
+        site = world.get_construction_site(self.x, self.y)
+        if site is None:
+            if not world.can_place_building(
+                self.x, self.y, self.blueprint.width, self.blueprint.height
+            ):
+                self.finished = True
+                return
+            for res, amount in self.blueprint.cost.items():
+                if entity.inventory.items.get(res, 0) < amount:
+                    self.finished = True
+                    return
+            for res, amount in self.blueprint.cost.items():
+                entity.inventory.items[res] -= amount
+                if entity.inventory.items[res] <= 0:
+                    del entity.inventory.items[res]
+            site = world.start_construction(self.blueprint, self.x, self.y)
+            if site is None:
+                self.finished = True
+                return
+        self.site = site
+        self.site.participants.add(entity.id)
+
+    def step(
+        self, entity: "Entity", world: World, occupied: set[Tuple[int, int]]
+    ) -> None:
+        if self.site is None:
+            self.finished = True
+            return
+        built = world.advance_construction(self.site, entity.id)
+        self.finished = built
