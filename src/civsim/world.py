@@ -288,6 +288,11 @@ class World:
                     self._place_wood_cluster(x, y, rng, cluster)
         self._ensure_starting_resources(rng)
 
+        for row in self.tiles:
+            for tile in row:
+                if tile.biome is Biome.WATER:
+                    tile.resources[Resource.WATER] = 1
+
     def in_bounds(self, x: int, y: int) -> bool:
         """Return True if the coordinates are inside the map."""
 
@@ -352,12 +357,11 @@ class World:
             ],
             Biome.PLAINS: [
                 (Resource.BERRY_BUSH, 0.6),
-                (Resource.WATER, 0.2),
                 (Resource.ANIMAL, 0.5),
                 (Resource.WOOD, 0.1),
                 (Resource.STONE, 0.1),
                 (Resource.IRON, 0.05),
-                (None, 0.2),
+                (None, 0.4),
             ],
             Biome.DESERT: [
                 (Resource.STONE, 0.4),
@@ -366,8 +370,7 @@ class World:
                 (Resource.COPPER, 0.05),
                 (Resource.COAL, 0.05),
                 (Resource.GOLD, 0.05),
-                (Resource.WATER, 0.05),
-                (None, 0.4),
+                (None, 0.45),
             ],
             Biome.MOUNTAIN: [
                 (Resource.STONE, 0.5),
@@ -378,8 +381,8 @@ class World:
                 (None, 0.5),
             ],
             Biome.WATER: [
-                (Resource.WATER, 0.6),
-                (Resource.ANIMAL, 0.4),
+                (Resource.ANIMAL, 0.6),
+                (None, 0.4),
             ],
         }
 
@@ -488,7 +491,6 @@ class World:
                     break
 
         for _ in range(2):
-            _place(Resource.WATER)
             _place(Resource.BERRY_BUSH)
             _place(Resource.ANIMAL)
         if self.width >= 5 and self.height >= 5:

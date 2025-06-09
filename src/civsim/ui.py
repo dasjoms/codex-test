@@ -144,6 +144,15 @@ class SimulationUI:
                     fill=color,
                     outline="black",
                 )
+                if tile.building_id is not None:
+                    self.canvas.create_rectangle(
+                        x * ts,
+                        y * ts,
+                        (x + 1) * ts,
+                        (y + 1) * ts,
+                        fill="#666666",
+                        outline="black",
+                    )
                 if tile.resources:
                     cx = x * ts + ts // 2
                     cy = y * ts + ts // 2
@@ -200,8 +209,12 @@ class SimulationUI:
 
     def update_info(self) -> None:
         """Update the info panel for the currently selected entity."""
+        houses = sum(1 for b in self.sim.world.buildings if b.name == "house")
         self.summary_var.set(
-            f"Tick: {self.sim.tick}\nEntities: {len(self.sim.entities)}\nCommunities: {len(self.sim.world.communities)}"
+            f"Tick: {self.sim.tick}\n"
+            f"Entities: {len(self.sim.entities)}\n"
+            f"Houses: {houses}\n"
+            f"Communities: {len(self.sim.world.communities)}"
         )
 
         if self.selected is None and self.selected_tile is not None:
