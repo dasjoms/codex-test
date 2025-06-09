@@ -19,14 +19,16 @@ class Biome(Enum):
 
 
 class Resource(Enum):
-    """Types of resources that may appear on tiles."""
+    """Types of resources that may appear on tiles or in inventories."""
 
     WOOD = "wood"
     STONE = "stone"
     CLAY = "clay"
     WATER = "water"
-    FOOD = "food"
+    BERRY_BUSH = "berry_bush"
     ANIMAL = "animal"
+    BERRIES = "berries"
+    MEAT = "meat"
     IRON = "iron"
     COPPER = "copper"
     GOLD = "gold"
@@ -41,6 +43,7 @@ class Tile:
     elevation: float = 0.0
     resources: dict[Resource, int] = field(default_factory=dict)
     walkable: bool = True
+    regrow: dict[Resource, int] = field(default_factory=dict)
 
 
 class World:
@@ -141,9 +144,20 @@ class World:
                 res_type = self._choose_resource(tile.biome, rng)
                 if res_type is None:
                     continue
-                amount = self._resource_amount(res_type, rng)
-                tile.resources[res_type] = tile.resources.get(res_type, 0) + amount
-                tile.walkable = False
+                if res_type is Resource.ANIMAL:
+                    herd = rng.randint(2, 5)
+                    for _ in range(herd):
+                        hx = max(0, min(width - 1, tx + rng.randint(-2, 2)))
+                        hy = max(0, min(height - 1, ty + rng.randint(-2, 2)))
+                        htile = self.tiles[hy][hx]
+                        if Resource.ANIMAL in htile.resources:
+                            continue
+                        htile.resources[Resource.ANIMAL] = 1
+                        htile.walkable = False
+                else:
+                    amount = self._resource_amount(res_type, rng)
+                    tile.resources[res_type] = tile.resources.get(res_type, 0) + amount
+                    tile.walkable = False
 
     def in_bounds(self, x: int, y: int) -> bool:
         """Return True if the coordinates are inside the map."""
@@ -206,7 +220,7 @@ class World:
                 (None, 0.2),
             ],
             Biome.PLAINS: [
-                (Resource.FOOD, 0.3),
+                (Resource.BERRY_BUSH, 0.3),
                 (Resource.WATER, 0.2),
                 (Resource.ANIMAL, 0.2),
                 (Resource.WOOD, 0.1),
@@ -255,10 +269,10 @@ class World:
 
         ranges = {
             Resource.WOOD: (1, 1),
-            Resource.ANIMAL: (1, 3),
+            Resource.ANIMAL: (1, 1),
+            Resource.BERRY_BUSH: (1, 1),
             Resource.STONE: (2, 5),
             Resource.CLAY: (2, 5),
-            Resource.FOOD: (2, 6),
             Resource.WATER: (1, 3),
             Resource.IRON: (1, 3),
             Resource.COPPER: (1, 2),
@@ -267,3 +281,15 @@ class World:
         }
         low, high = ranges.get(res, (1, 3))
         return rng.randint(low, high)
+
+    def tick_regrowth(self) -> None:
+        """Advance resource regrowth timers and restore resources."""
+
+        for row in self.tiles:
+            for tile in row:
+                for res, timer in list(tile.regrow.items()):
+                    tile.regrow[res] -= 1
+                    if tile.regrow[res] <= 0:
+                        tile.resources[res] = 1
+                        tile.walkable = False
+                        del tile.regrow[res]

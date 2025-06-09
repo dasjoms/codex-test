@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
     from .entity import Entity
 
-from .world import World
+from .world import World, Resource
 
 
 class Action:
@@ -131,3 +131,16 @@ class RestAction(Action):
         entity.rest()
         if entity.needs.energy >= self.threshold:
             self.finished = True
+
+
+class ConsumeAction(Action):
+    """Consume a resource from the entity's inventory."""
+
+    def __init__(self, resource: Resource) -> None:
+        self.resource = resource
+
+    def step(
+        self, entity: "Entity", world: World, occupied: set[Tuple[int, int]]
+    ) -> None:
+        entity.consume(self.resource)
+        self.finished = True

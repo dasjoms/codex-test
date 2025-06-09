@@ -80,15 +80,43 @@ def test_entity_moves_to_remembered_resource() -> None:
     world = World(width=3, height=2, seed=1)
     tile = world.get_tile(2, 0)
     tile.resources.clear()
-    tile.resources[Resource.FOOD] = 1
+    tile.resources[Resource.BERRY_BUSH] = 1
     tile.walkable = False
 
     e = Entity(id=1, x=0, y=0)
     e.memory.update({(0, 0), (1, 0), (2, 0)})
     e.needs.hunger = 15
 
-    for _ in range(3):
+    for _ in range(2):
         e.take_turn(world)
 
     assert (e.x, e.y) == (1, 0)
-    assert Resource.FOOD in e.inventory.items
+    assert Resource.BERRIES in e.inventory.items
+
+
+def test_entity_consumes_food_and_water() -> None:
+    world = World(width=3, height=3, seed=1)
+    e = Entity(id=1, x=1, y=1)
+    e.inventory.add(Resource.BERRIES)
+    e.inventory.add(Resource.WATER)
+    e.needs.hunger = 15
+    e.needs.thirst = 15
+
+    e.take_turn(world)
+    assert e.needs.thirst < 15
+    assert Resource.WATER not in e.inventory.items
+
+    e.take_turn(world)
+    assert e.needs.hunger < 15
+    assert Resource.BERRIES not in e.inventory.items
+
+
+def test_health_regeneration() -> None:
+    world = World(width=3, height=3, seed=1)
+    e = Entity(id=1, x=1, y=1)
+    e.needs.health = 90
+    e.needs.hunger = 1
+    e.needs.thirst = 1
+
+    e.take_turn(world)
+    assert e.needs.health > 90

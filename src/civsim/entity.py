@@ -7,7 +7,14 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
 from .world import World, Resource, Tile
-from .actions import Action, GatherAction, MoveAction, MoveToAction, RestAction
+from .actions import (
+    Action,
+    GatherAction,
+    MoveAction,
+    MoveToAction,
+    RestAction,
+    ConsumeAction,
+)
 
 
 @dataclass
@@ -166,11 +173,34 @@ class Entity:
         if tile.resources[res] <= 0:
             del tile.resources[res]
             tile.walkable = True
-        self.inventory.add(res)
+            if res is Resource.BERRY_BUSH:
+                tile.regrow[Resource.BERRY_BUSH] = 100
+        if res is Resource.BERRY_BUSH:
+            self.inventory.add(Resource.BERRIES)
+        elif res is Resource.ANIMAL:
+            self.inventory.add(Resource.MEAT)
+        else:
+            self.inventory.add(res)
         if self.needs.hunger > 0:
             self.needs.hunger = max(0, self.needs.hunger - 1)
         if self.needs.thirst > 0:
             self.needs.thirst = max(0, self.needs.thirst - 1)
+
+    def consume(self, resource: Resource) -> None:
+        """Consume a resource from the inventory."""
+
+        if self.inventory.items.get(resource, 0) <= 0:
+            return
+        self.inventory.items[resource] -= 1
+        if self.inventory.items[resource] <= 0:
+            del self.inventory.items[resource]
+
+        if resource is Resource.WATER:
+            self.needs.thirst = max(0, self.needs.thirst - 5)
+        elif resource is Resource.BERRIES:
+            self.needs.hunger = max(0, self.needs.hunger - 3)
+        elif resource is Resource.MEAT:
+            self.needs.hunger = max(0, self.needs.hunger - 7)
 
     def rest(self) -> None:
         """Recover energy while increasing hunger and thirst."""
@@ -191,16 +221,39 @@ class Entity:
         if self.needs.energy <= 20:
             return RestAction()
 
+        if self.needs.health < 30:
+            if (
+                self.needs.thirst > 5
+                and self.inventory.items.get(Resource.WATER, 0) > 0
+            ):
+                return ConsumeAction(Resource.WATER)
+            for food in (Resource.MEAT, Resource.BERRIES):
+                if self.needs.hunger > 5 and self.inventory.items.get(food, 0) > 0:
+                    return ConsumeAction(food)
+
+        if self.needs.thirst >= 12 and self.inventory.items.get(Resource.WATER, 0) > 0:
+            return ConsumeAction(Resource.WATER)
+        if self.needs.hunger >= 12:
+            for food in (Resource.MEAT, Resource.BERRIES):
+                if self.inventory.items.get(food, 0) > 0:
+                    return ConsumeAction(food)
+
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         for dx, dy in directions:
             nx, ny = self.x + dx, self.y + dy
             if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
                 return GatherAction()
 
-        if self.needs.hunger >= 10:
-            loc = self.remembered_adjacent_tile_for_resource(world, Resource.FOOD)
+        if self.needs.thirst >= 8:
+            loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
             if loc:
                 return MoveToAction(target=loc)
+
+        if self.needs.hunger >= 8:
+            for res in (Resource.ANIMAL, Resource.BERRY_BUSH):
+                loc = self.remembered_adjacent_tile_for_resource(world, res)
+                if loc:
+                    return MoveToAction(target=loc)
 
         if self.needs.loneliness >= 8:
             dx, dy = random.choice(directions)
@@ -267,6 +320,19 @@ class Entity:
         self.needs.hunger += 1
         self.needs.thirst += 1
         self.needs.energy -= 1
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        if any((self.x + dx, self.y + dy) in occupied for dx, dy in directions):
+            self.needs.loneliness = max(0, self.needs.loneliness - 2)
+        else:
+            self.needs.loneliness += 1
+
+        regen = 0
+        if self.needs.hunger <= 5 or self.needs.thirst <= 5:
+            regen += 1
+        if self.needs.hunger <= 5 and self.needs.thirst <= 5:
+            regen += 1
+        if regen:
+            self.needs.health = min(self.needs.max_health, self.needs.health + regen)
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         if any((self.x + dx, self.y + dy) in occupied for dx, dy in directions):
             self.needs.loneliness = max(0, self.needs.loneliness - 2)

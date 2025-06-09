@@ -21,7 +21,10 @@ class Simulation:
     def step(self) -> None:
         """Advance the simulation by one tick."""
 
+        self.world.tick_regrowth()
+
         new_entities: List[Entity] = []
+        alive_entities: List[Entity] = []
 
         occupied: dict[tuple[int, int], int] = {}
         for ent in self.entities:
@@ -48,8 +51,11 @@ class Simulation:
 
             entity.take_turn(self.world, set(occupied.keys()))
 
-            pos = (entity.x, entity.y)
-            occupied[pos] = occupied.get(pos, 0) + 1
+            if entity.needs.health > 0:
+                pos = (entity.x, entity.y)
+                occupied[pos] = occupied.get(pos, 0) + 1
+                alive_entities.append(entity)
 
+        self.entities = alive_entities
         self.entities.extend(new_entities)
         self.tick += 1

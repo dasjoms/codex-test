@@ -1,4 +1,5 @@
-from civsim.world import World, Biome
+from civsim.world import World, Biome, Resource
+from civsim.entity import Entity
 
 
 def test_world_generation() -> None:
@@ -18,3 +19,22 @@ def test_resource_tiles_not_walkable() -> None:
                 has_resource = True
                 assert not tile.walkable
     assert has_resource
+
+
+def test_berry_bush_regrows() -> None:
+    world = World(width=3, height=3, seed=1)
+    tile = world.get_tile(1, 1)
+    tile.resources.clear()
+    tile.resources[Resource.BERRY_BUSH] = 1
+    tile.walkable = False
+
+    e = Entity(id=1, x=0, y=0)
+    e.memory.add((1, 1))
+    e.move(1, 1, world)
+    e.gather(world)
+
+    for _ in range(100):
+        world.tick_regrowth()
+
+    assert Resource.BERRY_BUSH in tile.resources
+    assert not tile.walkable
