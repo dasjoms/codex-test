@@ -4,7 +4,7 @@ from civsim.simulation import Simulation
 
 
 def test_house_capacity_and_memory_sharing() -> None:
-    world = World(width=5, height=5, seed=1, ensure_starting_resources=False)
+    world = World(width=5, height=5, seed=1)
     for dy in range(2):
         for dx in range(2):
             tile = world.get_tile(dx, dy)

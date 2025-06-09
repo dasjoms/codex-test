@@ -5,7 +5,7 @@ from civsim.simulation import Simulation
 
 
 def test_place_building_blocks_tiles() -> None:
-    world = World(width=5, height=5, seed=1, ensure_starting_resources=False)
+    world = World(width=5, height=5, seed=1)
     for dy in range(3):
         for dx in range(2):
             tile = world.get_tile(1 + dx, 1 + dy)
@@ -21,7 +21,12 @@ def test_place_building_blocks_tiles() -> None:
 
 
 def test_cannot_overlap_building() -> None:
-    world = World(width=5, height=5, seed=2, ensure_starting_resources=False)
+    world = World(width=5, height=5, seed=2)
+    for dy in range(2):
+        for dx in range(2):
+            tile = world.get_tile(dx, dy)
+            tile.resources.clear()
+            tile.walkable = True
     b1 = Building(id=0, x=0, y=0, width=2, height=2)
     assert world.place_building(b1)
     b2 = Building(id=1, x=1, y=1, width=2, height=2)
@@ -29,7 +34,7 @@ def test_cannot_overlap_building() -> None:
 
 
 def test_build_action_places_building() -> None:
-    world = World(width=4, height=4, seed=3, ensure_starting_resources=False)
+    world = World(width=4, height=4, seed=3)
     for dy in range(2):
         for dx in range(2):
             tile = world.get_tile(1 + dx, 1 + dy)
@@ -58,7 +63,7 @@ def test_build_action_places_building() -> None:
 
 
 def test_group_building_speeds_up() -> None:
-    world = World(width=4, height=4, seed=4, ensure_starting_resources=False)
+    world = World(width=4, height=4, seed=4)
     for dy in range(2):
         for dx in range(2):
             tile = world.get_tile(1 + dx, 1 + dy)

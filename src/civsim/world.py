@@ -139,7 +139,6 @@ class World:
         resource_scale: int = 8,
         region_size: int = 32,
         climate_scale: int = 10,
-        ensure_starting_resources: bool = True,
     ) -> None:
         self.width = width
         self.height = height
@@ -266,12 +265,28 @@ class World:
                         htile.resources[Resource.ANIMAL] = 1
                         htile.walkable = False
                 else:
-                    amount = self._resource_amount(res_type, rng)
-                    tile.resources[res_type] = tile.resources.get(res_type, 0) + amount
-                    tile.walkable = False
+                    if res_type is Resource.WOOD and rng.random() > 0.1:
+                        cluster = rng.randint(10, 25)
+                        self._place_wood_cluster(tx, ty, rng, cluster)
+                    else:
+                        amount = self._resource_amount(res_type, rng)
+                        tile.resources[res_type] = (
+                            tile.resources.get(res_type, 0) + amount
+                        )
+                        tile.walkable = False
 
-        if ensure_starting_resources:
-            self._ensure_starting_resources(rng)
+        for y in range(height):
+            for x in range(width):
+                tile = self.tiles[y][x]
+                if (
+                    tile.biome is Biome.FOREST
+                    and tile.walkable
+                    and not tile.resources
+                    and rng.random() < 0.3
+                ):
+                    cluster = rng.randint(10, 25)
+                    self._place_wood_cluster(x, y, rng, cluster)
+        self._ensure_starting_resources(rng)
 
     def in_bounds(self, x: int, y: int) -> bool:
         """Return True if the coordinates are inside the map."""
@@ -311,16 +326,18 @@ class World:
             return Biome.DESERT
 
         if temp < 0.3:
-            return Biome.FOREST if moist > 0.4 else Biome.PLAINS
+            return Biome.FOREST if moist > 0.3 else Biome.PLAINS
         if temp < 0.6:
-            if moist < 0.3:
+            if moist < 0.25:
                 return Biome.DESERT
-            if moist > 0.6:
+            if moist > 0.4:
                 return Biome.FOREST
             return Biome.PLAINS
 
-        if moist < 0.4:
+        if moist < 0.35:
             return Biome.DESERT
+        if moist > 0.55:
+            return Biome.FOREST
         return Biome.PLAINS
 
     def _choose_resource(self, biome: Biome, rng: random.Random) -> Resource | None:
@@ -328,10 +345,10 @@ class World:
 
         distribution = {
             Biome.FOREST: [
-                (Resource.WOOD, 0.8),
-                (Resource.ANIMAL, 0.6),
+                (Resource.WOOD, 1.5),
+                (Resource.ANIMAL, 0.3),
                 (Resource.STONE, 0.1),
-                (None, 0.2),
+                (None, 0.1),
             ],
             Biome.PLAINS: [
                 (Resource.BERRY_BUSH, 0.6),
@@ -395,6 +412,39 @@ class World:
         }
         low, high = ranges.get(res, (1, 3))
         return rng.randint(low, high)
+
+    def _place_wood_cluster(
+        self, x: int, y: int, rng: random.Random, size: int
+    ) -> None:
+        """Place a cluster of wood tiles starting from the given position."""
+
+        if not self.in_bounds(x, y):
+            return
+        frontier = [(x, y)]
+        placed: set[tuple[int, int]] = set()
+
+        while frontier and len(placed) < size:
+            cx, cy = rng.choice(frontier)
+            frontier.remove((cx, cy))
+            if not self.in_bounds(cx, cy) or (cx, cy) in placed:
+                continue
+            tile = self.tiles[cy][cx]
+            if not tile.walkable or tile.resources or tile.biome is Biome.WATER:
+                continue
+            tile.resources[Resource.WOOD] = 1
+            tile.walkable = False
+            placed.add((cx, cy))
+            neighbors = [
+                (cx + dx, cy + dy)
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                if self.in_bounds(cx + dx, cy + dy)
+            ]
+            rng.shuffle(neighbors)
+            for nx, ny in neighbors:
+                if len(placed) + len(frontier) >= size:
+                    break
+                if (nx, ny) not in placed:
+                    frontier.append((nx, ny))
 
     def _ensure_starting_resources(self, rng: random.Random) -> None:
         """Place essential resources near the center if missing."""
