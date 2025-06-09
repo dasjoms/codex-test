@@ -7,6 +7,8 @@ from enum import Enum
 import random
 from typing import List, Optional
 
+from .community import Community
+
 
 class Biome(Enum):
     """Different terrain types found on the map."""
@@ -72,6 +74,23 @@ class Building:
     name: str = "building"
     occupant_limit: int = 0
     occupant_ids: list[int] = field(default_factory=list)
+    inventory: dict[Resource, int] = field(default_factory=dict)
+
+    def deposit(self, resource: Resource, amount: int = 1) -> None:
+        """Add items to the building's shared inventory."""
+
+        self.inventory[resource] = self.inventory.get(resource, 0) + amount
+
+    def withdraw(self, resource: Resource, amount: int = 1) -> int:
+        """Remove up to the requested amount from the inventory."""
+
+        available = self.inventory.get(resource, 0)
+        taken = min(amount, available)
+        if taken:
+            self.inventory[resource] = available - taken
+            if self.inventory[resource] <= 0:
+                del self.inventory[resource]
+        return taken
 
     def add_occupant(self, entity_id: int) -> bool:
         """Add an entity to the building if capacity allows."""
@@ -136,6 +155,7 @@ class World:
         ]
         self.buildings = []
         self.construction_sites: list[ConstructionSite] = []
+        self.communities: list[Community] = []
 
         # generate temperature and moisture maps for realistic biomes
         coarse_w = max(1, width // climate_scale)
@@ -432,6 +452,22 @@ class World:
                     tile.building_id = None
                     tile.walkable = True
 
+    def closest_building(
+        self, x: int, y: int, name: str, max_dist: int | None = None
+    ) -> Building | None:
+        """Return the nearest building with the given name."""
+
+        best: Building | None = None
+        best_dist = max_dist if max_dist is not None else 1_000_000
+        for b in self.buildings:
+            if b.name != name:
+                continue
+            dist = max(abs(b.x - x), abs(b.y - y))
+            if dist < best_dist:
+                best = b
+                best_dist = dist
+        return best
+
     # ------------------------------------------------------------------
     # Construction projects
     # ------------------------------------------------------------------
@@ -476,6 +512,7 @@ class World:
                 height=site.blueprint.height,
                 name=site.blueprint.name,
                 occupant_limit=site.blueprint.occupant_limit,
+                inventory={},
             )
             building.id = len(self.buildings)
             self.buildings.append(building)

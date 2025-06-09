@@ -1,6 +1,7 @@
 """Convenience exports for the civsim package."""
 
 from .world import World, Biome, Building
+from .community import Community, CommunityTask
 from .entity import Entity, ReproductionRules
 from .simulation import Simulation
 from .actions import (
@@ -23,6 +24,8 @@ __all__ = [
     "World",
     "Biome",
     "Building",
+    "Community",
+    "CommunityTask",
     "Entity",
     "ReproductionRules",
     "Simulation",

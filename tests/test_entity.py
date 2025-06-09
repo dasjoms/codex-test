@@ -1,6 +1,7 @@
 from civsim.entity import Entity, ReproductionRules
-from civsim.world import World, Resource
+from civsim.world import World, Resource, Building
 from civsim.simulation import Simulation
+from civsim.actions import MoveToAction, ConsumeAction
 
 
 def test_entity_movement_and_gathering() -> None:
@@ -124,3 +125,58 @@ def test_health_regeneration() -> None:
 
     e.take_turn(world)
     assert e.needs.health > 90
+
+
+def test_entity_seeks_wood_for_building() -> None:
+    world = World(width=3, height=2, seed=1)
+    tile = world.get_tile(2, 0)
+    tile.resources.clear()
+    tile.resources[Resource.WOOD] = 1
+    tile.walkable = False
+    mid = world.get_tile(1, 0)
+    mid.resources.clear()
+    mid.walkable = True
+
+    e = Entity(id=1, x=0, y=0)
+    e.memory.update({(0, 0), (1, 0), (2, 0)})
+    e.needs.energy = 50
+
+    action = e.plan_action(world)
+    assert isinstance(action, MoveToAction)
+    assert action.target == (1, 0)
+
+
+def test_storage_deposit_and_withdraw() -> None:
+    world = World(width=3, height=3, seed=1)
+    storage = Building(id=0, x=1, y=1, width=1, height=1, name="storage")
+    assert world.place_building(storage)
+
+    e = Entity(id=1, x=0, y=1)
+    e.inventory.add(Resource.WOOD, 2)
+    e.memory.update({(0, 1), (1, 1)})
+
+    action = e.plan_action(world)
+    # move adjacent to storage since we are already next to it
+    assert Resource.WOOD not in e.inventory.items
+    assert storage.inventory[Resource.WOOD] == 2
+
+    storage.inventory[Resource.WATER] = 1
+    e.needs.thirst = 9
+    action = e.plan_action(world)
+    assert isinstance(action, ConsumeAction)
+    action.step(e, world, set())
+    assert e.needs.thirst < 9
+
+
+def test_move_to_storage_for_water() -> None:
+    world = World(width=3, height=2, seed=1)
+    storage = Building(id=0, x=2, y=0, width=1, height=1, name="storage")
+    world.get_tile(2, 0).resources.clear()
+    world.get_tile(2, 0).walkable = True
+    assert world.place_building(storage)
+    storage.inventory[Resource.WATER] = 1
+    e = Entity(id=1, x=0, y=0)
+    e.memory.update({(0, 0), (1, 0), (2, 0)})
+    e.needs.thirst = 9
+    action = e.plan_action(world)
+    assert isinstance(action, MoveToAction)

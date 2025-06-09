@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
 from .world import World, Resource, Tile, Building, Blueprint
+from .community import Community
 from .actions import (
     Action,
     GatherAction,
@@ -100,6 +101,7 @@ class Entity:
     last_reproduced: int = -9999
     current_action: Optional[Action] = None
     home_id: Optional[int] = None
+    community_id: Optional[int] = None
 
     def perceive(self, world: World) -> None:
         """Add visible tiles to memory based on perception range."""
@@ -161,6 +163,17 @@ class Entity:
                 nx, ny = x + dx, y + dy
                 if world.in_bounds(nx, ny) and world.get_tile(nx, ny).walkable:
                     return nx, ny
+        return None
+
+    def adjacent_tile_for_building(
+        self, world: World, building: Building
+    ) -> Tuple[int, int] | None:
+        """Return a walkable tile adjacent to the given building."""
+
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = building.x + dx, building.y + dy
+            if world.in_bounds(nx, ny) and world.get_tile(nx, ny).walkable:
+                return nx, ny
         return None
 
     def gather(self, world: World) -> None:
@@ -259,8 +272,66 @@ class Entity:
         self.home_id = building.id
         return True
 
+    def join_community(self, community: "Community") -> None:
+        """Associate this entity with a community."""
+
+        self.community_id = community.id
+        community.add_member(self.id)
+
+    def leave_community(self, community: "Community") -> None:
+        """Remove this entity from the community."""
+
+        if self.community_id == community.id:
+            self.community_id = None
+        community.remove_member(self.id)
+
     def plan_action(self, world: World) -> Action:
         """Select the next action based on needs and memory."""
+
+        storage = world.closest_building(self.x, self.y, "storage", 5)
+        if storage:
+            dist = max(abs(storage.x - self.x), abs(storage.y - self.y))
+            if dist <= 1:
+                for res in (Resource.WOOD, Resource.STONE, Resource.CLAY):
+                    amt = self.inventory.items.pop(res, 0)
+                    if amt:
+                        storage.deposit(res, amt)
+                if (
+                    self.needs.thirst >= 8
+                    and storage.inventory.get(Resource.WATER, 0) > 0
+                ):
+                    if storage.withdraw(Resource.WATER, 1):
+                        self.inventory.add(Resource.WATER)
+                        return ConsumeAction(Resource.WATER)
+                if self.needs.hunger >= 8:
+                    for r in (Resource.MEAT, Resource.BERRIES):
+                        if storage.inventory.get(r, 0) > 0:
+                            if storage.withdraw(r, 1):
+                                self.inventory.add(r)
+                                return ConsumeAction(r)
+            else:
+                if (
+                    self.needs.thirst >= 8
+                    and storage.inventory.get(Resource.WATER, 0) > 0
+                    and self.inventory.items.get(Resource.WATER, 0) == 0
+                ):
+                    loc = self.adjacent_tile_for_building(world, storage)
+                    if loc:
+                        return MoveToAction(target=loc)
+                if (
+                    self.needs.hunger >= 8
+                    and not any(
+                        self.inventory.items.get(r, 0) > 0
+                        for r in (Resource.MEAT, Resource.BERRIES)
+                    )
+                    and any(
+                        storage.inventory.get(r, 0) > 0
+                        for r in (Resource.BERRIES, Resource.MEAT)
+                    )
+                ):
+                    loc = self.adjacent_tile_for_building(world, storage)
+                    if loc:
+                        return MoveToAction(target=loc)
 
         if self.needs.energy <= 20:
             return RestAction()
@@ -303,6 +374,14 @@ class Entity:
         for site in world.construction_sites:
             if not site.built and max(abs(site.x - self.x), abs(site.y - self.y)) <= 1:
                 return BuildAction(site.blueprint, site.x, site.y)
+
+        if self.inventory.items.get(Resource.WOOD, 0) < 4:
+            loc = self.remembered_adjacent_tile_for_resource(world, Resource.WOOD)
+            if loc:
+                return MoveToAction(target=loc)
+            explore = self.step_toward_unexplored(world)
+            if explore:
+                return explore
 
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         for dx, dy in directions:
