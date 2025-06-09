@@ -82,6 +82,10 @@ def test_entity_moves_to_remembered_resource() -> None:
     tile.resources.clear()
     tile.resources[Resource.BERRY_BUSH] = 1
     tile.walkable = False
+    world.get_tile(0, 0).resources.clear()
+    mid = world.get_tile(1, 0)
+    mid.resources.clear()
+    mid.walkable = True
 
     e = Entity(id=1, x=0, y=0)
     e.memory.update({(0, 0), (1, 0), (2, 0)})

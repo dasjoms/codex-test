@@ -1,6 +1,6 @@
 """Convenience exports for the civsim package."""
 
-from .world import World, Biome
+from .world import World, Biome, Building
 from .entity import Entity, ReproductionRules
 from .simulation import Simulation
 from .actions import (
@@ -22,6 +22,7 @@ from .ui import SimulationUI
 __all__ = [
     "World",
     "Biome",
+    "Building",
     "Entity",
     "ReproductionRules",
     "Simulation",

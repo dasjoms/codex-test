@@ -21,7 +21,14 @@ def render_ascii(world: World, entities: List[Entity]) -> str:
         }[biome]
 
     grid = [
-        [tile_char(world.tiles[y][x].biome) for x in range(world.width)]
+        [
+            (
+                "B"
+                if world.tiles[y][x].building_id is not None
+                else tile_char(world.tiles[y][x].biome)
+            )
+            for x in range(world.width)
+        ]
         for y in range(world.height)
     ]
 
@@ -83,6 +90,10 @@ def render_svg(world: World, entities: List[Entity], tile_size: int = 20) -> str
             parts.append(
                 f'<rect x="{x*tile_size}" y="{y*tile_size}" width="{tile_size}" height="{tile_size}" fill="{color}" />'
             )
+            if tile.building_id is not None:
+                parts.append(
+                    f'<rect x="{x*tile_size}" y="{y*tile_size}" width="{tile_size}" height="{tile_size}" fill="#666666" opacity="0.6" />'
+                )
             if tile.resources:
                 r = tile_size // 6
                 cx = x * tile_size + tile_size // 2
