@@ -320,6 +320,11 @@ class Entity:
         self.needs.hunger += 1
         self.needs.thirst += 1
         self.needs.energy -= 1
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        if any((self.x + dx, self.y + dy) in occupied for dx, dy in directions):
+            self.needs.loneliness = max(0, self.needs.loneliness - 2)
+        else:
+            self.needs.loneliness += 1
 
         regen = 0
         if self.needs.hunger <= 5 or self.needs.thirst <= 5:
