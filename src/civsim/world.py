@@ -287,6 +287,7 @@ class World:
                     cluster = rng.randint(10, 25)
                     self._place_wood_cluster(x, y, rng, cluster)
         self._ensure_starting_resources(rng)
+        self._prune_forest_density(rng)
 
         for row in self.tiles:
             for tile in row:
@@ -496,6 +497,58 @@ class World:
         if self.width >= 5 and self.height >= 5:
             for _ in range(3):
                 _place(Resource.WOOD)
+
+    def _prune_forest_density(self, rng: random.Random) -> None:
+        """Ensure forest tiles have at most 50% tree coverage."""
+
+        forest_tiles: list[tuple[int, int]] = []
+        wood_tiles: list[tuple[int, int]] = []
+        for y in range(self.height):
+            for x in range(self.width):
+                tile = self.tiles[y][x]
+                if tile.biome is Biome.FOREST:
+                    forest_tiles.append((x, y))
+                    if Resource.WOOD in tile.resources:
+                        wood_tiles.append((x, y))
+
+        allowed = int(len(forest_tiles) * 0.5)
+        if len(wood_tiles) <= allowed:
+            return
+
+        visited: set[tuple[int, int]] = set()
+        clusters: list[list[tuple[int, int]]] = []
+        for coord in wood_tiles:
+            if coord in visited:
+                continue
+            stack = [coord]
+            visited.add(coord)
+            cluster: list[tuple[int, int]] = []
+            while stack:
+                cx, cy = stack.pop()
+                cluster.append((cx, cy))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = cx + dx, cy + dy
+                    if (
+                        self.in_bounds(nx, ny)
+                        and (nx, ny) not in visited
+                        and self.tiles[ny][nx].biome is Biome.FOREST
+                        and Resource.WOOD in self.tiles[ny][nx].resources
+                    ):
+                        visited.add((nx, ny))
+                        stack.append((nx, ny))
+            clusters.append(cluster)
+
+        rng.shuffle(clusters)
+        total = len(wood_tiles)
+        for cluster in clusters:
+            if total <= allowed:
+                break
+            for x, y in cluster:
+                tile = self.tiles[y][x]
+                if Resource.WOOD in tile.resources:
+                    del tile.resources[Resource.WOOD]
+                    tile.walkable = not tile.resources
+            total -= len(cluster)
 
     def tick_regrowth(self) -> None:
         """Advance resource regrowth timers and restore resources."""
