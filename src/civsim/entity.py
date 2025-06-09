@@ -249,9 +249,9 @@ class Entity:
                 if self.needs.hunger > 5 and self.inventory.items.get(food, 0) > 0:
                     return ConsumeAction(food)
 
-        if self.needs.thirst >= 12 and self.inventory.items.get(Resource.WATER, 0) > 0:
+        if self.needs.thirst >= 8 and self.inventory.items.get(Resource.WATER, 0) > 0:
             return ConsumeAction(Resource.WATER)
-        if self.needs.hunger >= 12:
+        if self.needs.hunger >= 8:
             for food in (Resource.MEAT, Resource.BERRIES):
                 if self.inventory.items.get(food, 0) > 0:
                     return ConsumeAction(food)
@@ -284,12 +284,12 @@ class Entity:
             if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
                 return GatherAction()
 
-        if self.needs.thirst >= 50 and self.inventory.items.get(Resource.WATER, 0) == 0:
+        if self.needs.thirst >= 40 and self.inventory.items.get(Resource.WATER, 0) == 0:
             loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
             if loc:
                 return MoveToAction(target=loc)
 
-        if self.needs.hunger >= 50 and not any(
+        if self.needs.hunger >= 40 and not any(
             self.inventory.items.get(res, 0) > 0
             for res in (Resource.MEAT, Resource.BERRIES)
         ):
