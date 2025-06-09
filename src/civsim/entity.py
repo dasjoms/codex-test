@@ -18,8 +18,8 @@ from .actions import (
     BuildAction,
 )
 
-BASE_MEMORY_TTL = 20.0
-VISIT_MEMORY_BOOST = 30.0
+BASE_MEMORY_TTL = 40.0
+VISIT_MEMORY_BOOST = 40.0
 MAX_MEMORY_TTL = 100.0
 
 
@@ -168,6 +168,8 @@ class Entity:
             and (nx, ny) not in occupied
             and world.get_tile(nx, ny).walkable
         ):
+            if (nx, ny) not in self.memory:
+                self.needs.morale = min(100, self.needs.morale + 2)
             self.x, self.y = nx, ny
             return True
         return False
@@ -432,12 +434,12 @@ class Entity:
             height=2,
             cost={Resource.WOOD: 4},
             bonuses={"morale": 5},
-            occupant_limit=4,
+            occupant_limit=2,
             build_time=5,
         )
         if (
             self.inventory.items.get(Resource.WOOD, 0) >= 4
-            and self.needs.energy > 80
+            and self.needs.energy > 60
             and world.can_place_building(
                 self.x, self.y, house_bp.width, house_bp.height
             )
@@ -453,6 +455,12 @@ class Entity:
         for dx, dy in directions:
             nx, ny = self.x + dx, self.y + dy
             if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
+                resources = world.get_tile(nx, ny).resources
+                if Resource.WOOD in resources:
+                    if self.inventory.items.get(
+                        Resource.WOOD, 0
+                    ) >= 8 and world.can_place_building(self.x, self.y, 2, 2):
+                        continue
                 return GatherAction()
 
         if self.inventory.items.get(Resource.WOOD, 0) < 4:

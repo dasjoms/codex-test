@@ -453,12 +453,34 @@ class World:
         center_y = self.height // 2
         radius = 2
 
+        start_tile = self.tiles[center_y][center_x]
+        start_tile.resources.clear()
+        start_tile.walkable = True
+
+        adj = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        rng.shuffle(adj)
+        open_tile = (center_x + adj[-1][0], center_y + adj[-1][1])
+        if self.in_bounds(*open_tile):
+            clear_tile = self.tiles[open_tile[1]][open_tile[0]]
+            clear_tile.resources.clear()
+            clear_tile.walkable = True
+        for dx, dy in adj[:3]:
+            sx, sy = center_x + dx, center_y + dy
+            if self.in_bounds(sx, sy):
+                tile = self.tiles[sy][sx]
+                tile.resources[Resource.WOOD] = tile.resources.get(Resource.WOOD, 0) + 3
+                tile.walkable = False
+
         def _place(res: Resource) -> None:
             for _ in range(100):
                 x = max(0, min(self.width - 1, center_x + rng.randint(-radius, radius)))
                 y = max(
                     0, min(self.height - 1, center_y + rng.randint(-radius, radius))
                 )
+                if x == center_x and y == center_y:
+                    continue
+                if (x, y) == open_tile:
+                    continue
                 tile = self.tiles[y][x]
                 if tile.walkable:
                     tile.resources[res] = tile.resources.get(res, 0) + 1
@@ -469,6 +491,9 @@ class World:
             _place(Resource.WATER)
             _place(Resource.BERRY_BUSH)
             _place(Resource.ANIMAL)
+        if self.width >= 5 and self.height >= 5:
+            for _ in range(3):
+                _place(Resource.WOOD)
 
     def tick_regrowth(self) -> None:
         """Advance resource regrowth timers and restore resources."""
