@@ -43,3 +43,14 @@ def test_reproduction_requires_conditions() -> None:
     sim = Simulation(world=world, entities=[e1, e2])
     sim.step()
     assert len(sim.entities) == 2
+
+
+def test_entities_die_and_are_removed() -> None:
+    world = World(width=3, height=3, seed=1)
+    e = Entity(id=0, x=1, y=1)
+    e.needs.health = 5
+    e.needs.hunger = 20
+    e.needs.thirst = 20
+    sim = Simulation(world=world, entities=[e])
+    sim.step()
+    assert not sim.entities

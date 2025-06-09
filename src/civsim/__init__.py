@@ -3,6 +3,14 @@
 from .world import World, Biome
 from .entity import Entity, ReproductionRules
 from .simulation import Simulation
+from .actions import (
+    Action,
+    MoveAction,
+    MoveToAction,
+    GatherAction,
+    RestAction,
+    ConsumeAction,
+)
 from .visualize import (
     render_ascii,
     render_svg,
@@ -17,6 +25,12 @@ __all__ = [
     "Entity",
     "ReproductionRules",
     "Simulation",
+    "Action",
+    "MoveAction",
+    "MoveToAction",
+    "GatherAction",
+    "RestAction",
+    "ConsumeAction",
     "render_ascii",
     "render_svg",
     "render_vision_ascii",
