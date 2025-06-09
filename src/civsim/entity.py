@@ -380,7 +380,7 @@ class Entity:
         self.perceive(world)
 
         if self.needs.hunger >= 20 or self.needs.thirst >= 20:
-            self.needs.health = max(0, self.needs.health - 5)
+            self.needs.health = max(0, self.needs.health - 0.25)
             self.needs.injuries += 1
 
         if (
