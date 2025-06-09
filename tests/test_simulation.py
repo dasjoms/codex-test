@@ -5,7 +5,7 @@ from civsim.world import World
 
 
 def test_simulation_step() -> None:
-    world = World(width=5, height=5, seed=3, ensure_starting_resources=False)
+    world = World(width=5, height=5, seed=3)
     entities = [Entity(id=0, x=2, y=2)]
     sim = Simulation(world=world, entities=entities)
     sim.step()
@@ -13,7 +13,7 @@ def test_simulation_step() -> None:
 
 
 def test_reproduction_creates_new_entity() -> None:
-    world = World(width=3, height=3, seed=2, ensure_starting_resources=False)
+    world = World(width=3, height=3, seed=2)
     e1 = Entity(id=0, x=1, y=1)
     e2 = Entity(id=1, x=1, y=1)
     e1.age = 20
@@ -26,7 +26,12 @@ def test_reproduction_creates_new_entity() -> None:
 
 
 def test_entities_do_not_overlap_after_step() -> None:
-    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
+    world = World(width=3, height=3, seed=1)
+    for y in range(3):
+        for x in range(3):
+            tile = world.get_tile(x, y)
+            tile.resources.clear()
+            tile.walkable = True
     e1 = Entity(id=0, x=1, y=1)
     e2 = Entity(id=1, x=1, y=1)
     sim = Simulation(world=world, entities=[e1, e2])
@@ -36,7 +41,7 @@ def test_entities_do_not_overlap_after_step() -> None:
 
 
 def test_reproduction_requires_conditions() -> None:
-    world = World(width=3, height=3, seed=3, ensure_starting_resources=False)
+    world = World(width=3, height=3, seed=3)
     e1 = Entity(id=0, x=1, y=1)
     e2 = Entity(id=1, x=1, y=1)
     e1.age = 5  # below threshold
@@ -47,7 +52,7 @@ def test_reproduction_requires_conditions() -> None:
 
 
 def test_entities_die_and_are_removed() -> None:
-    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
+    world = World(width=3, height=3, seed=1)
     e = Entity(id=0, x=1, y=1)
     e.needs.health = 5
     e.needs.hunger = 20
@@ -59,7 +64,12 @@ def test_entities_die_and_are_removed() -> None:
 
 
 def test_seek_unexplored_when_no_known_resources() -> None:
-    world = World(width=5, height=5, seed=1, ensure_starting_resources=False)
+    world = World(width=5, height=5, seed=1)
+    for y in range(5):
+        for x in range(5):
+            t = world.get_tile(x, y)
+            t.resources.clear()
+            t.walkable = True
     e = Entity(id=0, x=2, y=2)
     e.needs.hunger = 15
     action = e.plan_action(world)
