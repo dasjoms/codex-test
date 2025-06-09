@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import List
 
 from .entity import Entity
-from .world import World, Biome, Resource
+from .world import World, Biome
+from .colors import BIOME_COLORS, RESOURCE_COLORS
 
 
 def render_ascii(world: World, entities: List[Entity]) -> str:
@@ -42,41 +43,8 @@ def render_ascii(world: World, entities: List[Entity]) -> str:
 def render_svg(world: World, entities: List[Entity], tile_size: int = 20) -> str:
     """Return an SVG representation of the world with entities and resources."""
 
-    colors = {
-        Biome.PLAINS: "#a4c689",
-        Biome.FOREST: "#228b22",
-        Biome.DESERT: "#e0c469",
-        Biome.WATER: "#1e90ff",
-        Biome.MOUNTAIN: "#888888",
-    }
-    res_colors = {
-        Resource.WOOD: "#8b4513",
-        Resource.STONE: "#808080",
-        Resource.CLAY: "#b5651d",
-        Resource.WATER: "#00bfff",
-        Resource.BERRY_BUSH: "#ff6347",
-        Resource.ANIMAL: "#fafad2",
-        Resource.BERRIES: "#ff9999",
-        Resource.MEAT: "#cd5c5c",
-        Resource.IRON: "#b0b0b0",
-        Resource.COPPER: "#b87333",
-        Resource.GOLD: "#ffd700",
-        Resource.COAL: "#2f4f4f",
-    }
-    res_colors = {
-        Resource.WOOD: "#8b4513",
-        Resource.STONE: "#808080",
-        Resource.CLAY: "#b5651d",
-        Resource.WATER: "#00bfff",
-        Resource.BERRY_BUSH: "#ff6347",
-        Resource.ANIMAL: "#fafad2",
-        Resource.BERRIES: "#ff9999",
-        Resource.MEAT: "#cd5c5c",
-        Resource.IRON: "#b0b0b0",
-        Resource.COPPER: "#b87333",
-        Resource.GOLD: "#ffd700",
-        Resource.COAL: "#2f4f4f",
-    }
+    colors = BIOME_COLORS
+    res_colors = RESOURCE_COLORS
     width_px = world.width * tile_size
     height_px = world.height * tile_size
     parts = [
@@ -163,7 +131,7 @@ def render_memory_ascii(world: World, entity: Entity) -> str:
         for y in range(world.height)
     ]
 
-    for x, y in entity.memory:
+    for x, y in entity.memory.keys():
         if world.in_bounds(x, y):
             grid[y][x] = "#"
 

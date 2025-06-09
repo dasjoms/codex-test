@@ -74,10 +74,11 @@ class Simulation:
             mem_union: set[tuple[int, int]] = set()
             for eid in house.occupant_ids:
                 if eid in ent_map:
-                    mem_union |= ent_map[eid].memory
+                    mem_union |= set(ent_map[eid].memory.keys())
             for eid in house.occupant_ids:
                 if eid in ent_map:
-                    ent_map[eid].memory |= mem_union
+                    for pos in mem_union:
+                        ent_map[eid].remember(*pos, persistent=True)
 
         for i, h1 in enumerate(houses):
             for h2 in houses[i + 1 :]:
@@ -85,10 +86,11 @@ class Simulation:
                     mem_union = set()
                     for eid in h1.occupant_ids + h2.occupant_ids:
                         if eid in ent_map:
-                            mem_union |= ent_map[eid].memory
+                            mem_union |= set(ent_map[eid].memory.keys())
                     for eid in h1.occupant_ids + h2.occupant_ids:
                         if eid in ent_map:
-                            ent_map[eid].memory |= mem_union
+                            for pos in mem_union:
+                                ent_map[eid].remember(*pos, persistent=True)
 
     def _complete_construction(self) -> None:
         """Finalize finished construction sites and reward builders."""

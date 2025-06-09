@@ -18,6 +18,10 @@ from .actions import (
     BuildAction,
 )
 
+BASE_MEMORY_TTL = 20.0
+VISIT_MEMORY_BOOST = 30.0
+MAX_MEMORY_TTL = 100.0
+
 
 @dataclass
 class Needs:
@@ -93,15 +97,46 @@ class Entity:
     needs: Needs = field(default_factory=Needs)
     traits: Traits = field(default_factory=Traits)
     age: int = 0
-    max_age: int = 100
+    max_age: int = 100000
     inventory: Inventory = field(default_factory=Inventory)
     skills: Skills = field(default_factory=Skills)
-    memory: Set[Tuple[int, int]] = field(default_factory=set)
+    memory: Dict[Tuple[int, int], float] = field(default_factory=dict)
     relationships: Dict[int, str] = field(default_factory=dict)
     last_reproduced: int = -9999
     current_action: Optional[Action] = None
     home_id: Optional[int] = None
     community_id: Optional[int] = None
+
+    def remember(
+        self,
+        x: int,
+        y: int,
+        *,
+        visited: bool = False,
+        persistent: bool = False,
+    ) -> None:
+        """Store a tile in memory with a decay timer."""
+
+        if persistent:
+            self.memory[(x, y)] = float("inf")
+            return
+        ttl = BASE_MEMORY_TTL + (VISIT_MEMORY_BOOST if visited else 0)
+        ttl = min(ttl, MAX_MEMORY_TTL)
+        current = self.memory.get((x, y))
+        if current is None or current < ttl:
+            self.memory[(x, y)] = ttl
+
+    def decay_memory(self) -> None:
+        """Reduce memory timers and drop expired entries."""
+
+        to_delete = [pos for pos, ttl in self.memory.items() if ttl != float("inf")]
+        for pos in to_delete:
+            ttl = self.memory[pos]
+            ttl -= 1
+            if ttl <= 0:
+                del self.memory[pos]
+            else:
+                self.memory[pos] = ttl
 
     def perceive(self, world: World) -> None:
         """Add visible tiles to memory based on perception range."""
@@ -111,7 +146,7 @@ class Entity:
             for dx in range(-r, r + 1):
                 x, y = self.x + dx, self.y + dy
                 if world.in_bounds(x, y):
-                    self.memory.add((x, y))
+                    self.remember(x, y)
 
     def move(
         self,
@@ -140,7 +175,7 @@ class Entity:
     ) -> Tuple[int, int] | None:
         """Return coordinates of a remembered tile containing the resource."""
 
-        for x, y in sorted(self.memory):
+        for x, y in sorted(self.memory.keys()):
             if not world.in_bounds(x, y):
                 continue
             tile = world.get_tile(x, y)
@@ -153,7 +188,7 @@ class Entity:
     ) -> Tuple[int, int] | None:
         """Return a walkable tile adjacent to a remembered resource."""
 
-        for x, y in self.memory:
+        for x, y in self.memory.keys():
             if not world.in_bounds(x, y):
                 continue
             tile = world.get_tile(x, y)
@@ -163,6 +198,32 @@ class Entity:
                 nx, ny = x + dx, y + dy
                 if world.in_bounds(nx, ny) and world.get_tile(nx, ny).walkable:
                     return nx, ny
+        return None
+
+    def nearest_unexplored_tile(self, world: World) -> Tuple[int, int] | None:
+        """Return the closest walkable tile that is not in memory."""
+
+        from collections import deque
+
+        start = (self.x, self.y)
+        if start not in self.memory:
+            return start
+        queue: deque[tuple[int, int]] = deque([start])
+        visited: set[tuple[int, int]] = {start}
+        while queue:
+            x, y = queue.popleft()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if not world.in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in visited:
+                    continue
+                visited.add((nx, ny))
+                if not world.get_tile(nx, ny).walkable:
+                    continue
+                if (nx, ny) not in self.memory:
+                    return nx, ny
+                queue.append((nx, ny))
         return None
 
     def adjacent_tile_for_building(
@@ -192,12 +253,13 @@ class Entity:
 
         tile, _ = random.choice(sources)
         res = random.choice(list(tile.resources.keys()))
-        tile.resources[res] -= 1
-        if tile.resources[res] <= 0:
-            del tile.resources[res]
-            tile.walkable = True
-            if res is Resource.BERRY_BUSH:
-                tile.regrow[Resource.BERRY_BUSH] = 100
+        if res is not Resource.WATER:
+            tile.resources[res] -= 1
+            if tile.resources[res] <= 0:
+                del tile.resources[res]
+                tile.walkable = True
+                if res is Resource.BERRY_BUSH:
+                    tile.regrow[Resource.BERRY_BUSH] = 100
         if res is Resource.BERRY_BUSH:
             self.inventory.add(Resource.BERRIES)
         elif res is Resource.ANIMAL:
@@ -375,29 +437,35 @@ class Entity:
             if not site.built and max(abs(site.x - self.x), abs(site.y - self.y)) <= 1:
                 return BuildAction(site.blueprint, site.x, site.y)
 
-        if self.inventory.items.get(Resource.WOOD, 0) < 4:
-            loc = self.remembered_adjacent_tile_for_resource(world, Resource.WOOD)
-            if loc:
-                return MoveToAction(target=loc)
-            explore = self.step_toward_unexplored(world)
-            if explore:
-                return explore
-
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         for dx, dy in directions:
             nx, ny = self.x + dx, self.y + dy
             if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
                 return GatherAction()
 
-        if self.needs.thirst >= 15 and self.inventory.items.get(Resource.WATER, 0) == 0:
-            loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
+        if self.inventory.items.get(Resource.WOOD, 0) < 4:
+            loc = self.remembered_adjacent_tile_for_resource(world, Resource.WOOD)
             if loc:
                 return MoveToAction(target=loc)
+            target = self.nearest_unexplored_tile(world)
+            if target:
+                return MoveToAction(target=target)
             explore = self.step_toward_unexplored(world)
             if explore:
                 return explore
 
-        if self.needs.hunger >= 15 and not any(
+        if self.needs.thirst >= 8 and self.inventory.items.get(Resource.WATER, 0) == 0:
+            loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
+            if loc:
+                return MoveToAction(target=loc)
+            target = self.nearest_unexplored_tile(world)
+            if target:
+                return MoveToAction(target=target)
+            explore = self.step_toward_unexplored(world)
+            if explore:
+                return explore
+
+        if self.needs.hunger >= 8 and not any(
             self.inventory.items.get(res, 0) > 0
             for res in (Resource.MEAT, Resource.BERRIES)
         ):
@@ -405,6 +473,9 @@ class Entity:
                 loc = self.remembered_adjacent_tile_for_resource(world, res)
                 if loc:
                     return MoveToAction(target=loc)
+            target = self.nearest_unexplored_tile(world)
+            if target:
+                return MoveToAction(target=target)
             explore = self.step_toward_unexplored(world)
             if explore:
                 return explore
@@ -471,6 +542,7 @@ class Entity:
             occupied = set()
 
         self.age += 1
+        self.decay_memory()
         self.needs.hunger += 0.5
         self.needs.thirst += 0.5
         self.needs.energy -= 1
@@ -487,7 +559,7 @@ class Entity:
             regen += 1
         if regen:
             self.needs.health = min(self.needs.max_health, self.needs.health + regen)
-        self.memory.add((self.x, self.y))
+        self.remember(self.x, self.y, visited=True)
         self.perceive(world)
 
         if self.needs.hunger >= 20 or self.needs.thirst >= 20:
@@ -511,5 +583,5 @@ class Entity:
             self.current_action.start(self, world)
 
         self.current_action.step(self, world, occupied)
-        self.memory.add((self.x, self.y))
+        self.remember(self.x, self.y, visited=True)
         self.perceive(world)

@@ -5,7 +5,7 @@ from civsim.actions import MoveToAction, ConsumeAction
 
 
 def test_entity_movement_and_gathering() -> None:
-    world = World(width=3, height=3, seed=2)
+    world = World(width=3, height=3, seed=2, ensure_starting_resources=False)
     entity = Entity(id=1, x=1, y=1)
     tile = world.get_tile(1, 2)
     tile.resources.clear()
@@ -19,7 +19,7 @@ def test_entity_movement_and_gathering() -> None:
 
 
 def test_entity_needs_update_and_rest() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     entity = Entity(id=1, x=1, y=1)
     entity.needs.energy = 1
 
@@ -30,7 +30,7 @@ def test_entity_needs_update_and_rest() -> None:
 
 
 def test_entity_age_causes_death() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     entity = Entity(id=1, x=1, y=1, max_age=2)
 
     entity.take_turn(world)
@@ -40,7 +40,7 @@ def test_entity_age_causes_death() -> None:
 
 
 def test_entity_memory_and_relationships() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     e1 = Entity(id=1, x=1, y=1)
     e2 = Entity(id=2, x=1, y=1)
 
@@ -66,7 +66,7 @@ def test_can_reproduce_rules() -> None:
 
 
 def test_loneliness_updates_with_neighbors() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     e1 = Entity(id=1, x=1, y=1)
     e2 = Entity(id=2, x=2, y=1)
     sim = Simulation(world=world, entities=[e1, e2])
@@ -78,7 +78,7 @@ def test_loneliness_updates_with_neighbors() -> None:
 
 
 def test_entity_moves_to_remembered_resource() -> None:
-    world = World(width=3, height=2, seed=1)
+    world = World(width=3, height=2, seed=1, ensure_starting_resources=False)
     tile = world.get_tile(2, 0)
     tile.resources.clear()
     tile.resources[Resource.BERRY_BUSH] = 1
@@ -89,7 +89,8 @@ def test_entity_moves_to_remembered_resource() -> None:
     mid.walkable = True
 
     e = Entity(id=1, x=0, y=0)
-    e.memory.update({(0, 0), (1, 0), (2, 0)})
+    for pos in {(0, 0), (1, 0), (2, 0)}:
+        e.memory[pos] = float("inf")
     e.needs.hunger = 55
 
     for _ in range(2):
@@ -100,7 +101,7 @@ def test_entity_moves_to_remembered_resource() -> None:
 
 
 def test_entity_consumes_food_and_water() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     e = Entity(id=1, x=1, y=1)
     e.inventory.add(Resource.BERRIES)
     e.inventory.add(Resource.WATER)
@@ -117,7 +118,7 @@ def test_entity_consumes_food_and_water() -> None:
 
 
 def test_health_regeneration() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     e = Entity(id=1, x=1, y=1)
     e.needs.health = 90
     e.needs.hunger = 1
@@ -128,7 +129,7 @@ def test_health_regeneration() -> None:
 
 
 def test_entity_seeks_wood_for_building() -> None:
-    world = World(width=3, height=2, seed=1)
+    world = World(width=3, height=2, seed=1, ensure_starting_resources=False)
     tile = world.get_tile(2, 0)
     tile.resources.clear()
     tile.resources[Resource.WOOD] = 1
@@ -138,7 +139,8 @@ def test_entity_seeks_wood_for_building() -> None:
     mid.walkable = True
 
     e = Entity(id=1, x=0, y=0)
-    e.memory.update({(0, 0), (1, 0), (2, 0)})
+    for pos in {(0, 0), (1, 0), (2, 0)}:
+        e.memory[pos] = float("inf")
     e.needs.energy = 50
 
     action = e.plan_action(world)
@@ -147,13 +149,14 @@ def test_entity_seeks_wood_for_building() -> None:
 
 
 def test_storage_deposit_and_withdraw() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     storage = Building(id=0, x=1, y=1, width=1, height=1, name="storage")
     assert world.place_building(storage)
 
     e = Entity(id=1, x=0, y=1)
     e.inventory.add(Resource.WOOD, 2)
-    e.memory.update({(0, 1), (1, 1)})
+    for pos in {(0, 1), (1, 1)}:
+        e.memory[pos] = float("inf")
 
     action = e.plan_action(world)
     # move adjacent to storage since we are already next to it
@@ -169,14 +172,15 @@ def test_storage_deposit_and_withdraw() -> None:
 
 
 def test_move_to_storage_for_water() -> None:
-    world = World(width=3, height=2, seed=1)
+    world = World(width=3, height=2, seed=1, ensure_starting_resources=False)
     storage = Building(id=0, x=2, y=0, width=1, height=1, name="storage")
     world.get_tile(2, 0).resources.clear()
     world.get_tile(2, 0).walkable = True
     assert world.place_building(storage)
     storage.inventory[Resource.WATER] = 1
     e = Entity(id=1, x=0, y=0)
-    e.memory.update({(0, 0), (1, 0), (2, 0)})
+    for pos in {(0, 0), (1, 0), (2, 0)}:
+        e.memory[pos] = float("inf")
     e.needs.thirst = 9
     action = e.plan_action(world)
     assert isinstance(action, MoveToAction)

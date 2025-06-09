@@ -3,7 +3,7 @@ from civsim.entity import Entity
 
 
 def test_world_generation() -> None:
-    world = World(width=20, height=20, seed=1)
+    world = World(width=20, height=20, seed=1, ensure_starting_resources=False)
     assert world.width == 20
     assert world.height == 20
     biomes = {tile.biome for row in world.tiles for tile in row}
@@ -11,7 +11,7 @@ def test_world_generation() -> None:
 
 
 def test_resource_tiles_not_walkable() -> None:
-    world = World(width=10, height=10, seed=2)
+    world = World(width=10, height=10, seed=2, ensure_starting_resources=False)
     has_resource = False
     for row in world.tiles:
         for tile in row:
@@ -22,14 +22,14 @@ def test_resource_tiles_not_walkable() -> None:
 
 
 def test_berry_bush_regrows() -> None:
-    world = World(width=3, height=3, seed=1)
+    world = World(width=3, height=3, seed=1, ensure_starting_resources=False)
     tile = world.get_tile(1, 1)
     tile.resources.clear()
     tile.resources[Resource.BERRY_BUSH] = 1
     tile.walkable = False
 
     e = Entity(id=1, x=0, y=0)
-    e.memory.add((1, 1))
+    e.memory[(1, 1)] = float("inf")
     e.move(1, 1, world)
     e.gather(world)
 

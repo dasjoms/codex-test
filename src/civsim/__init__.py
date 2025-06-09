@@ -19,6 +19,7 @@ from .visualize import (
     render_memory_ascii,
 )
 from .ui import SimulationUI
+from .colors import BIOME_COLORS, RESOURCE_COLORS
 
 __all__ = [
     "World",
@@ -35,6 +36,8 @@ __all__ = [
     "GatherAction",
     "RestAction",
     "ConsumeAction",
+    "BIOME_COLORS",
+    "RESOURCE_COLORS",
     "render_ascii",
     "render_svg",
     "render_vision_ascii",

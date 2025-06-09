@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING
+import heapq
 
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
     from .entity import Entity
@@ -53,36 +54,43 @@ class MoveToAction(Action):
         self._rebuild_path(entity, world)
 
     def _rebuild_path(self, entity: "Entity", world: World) -> None:
-        self.path = self._bfs(entity, world)
+        self.path = self._astar(entity, world)
 
-    def _bfs(self, entity: "Entity", world: World) -> List[Tuple[int, int]]:
+    def _astar(self, entity: "Entity", world: World) -> List[Tuple[int, int]]:
         start = (entity.x, entity.y)
         goal = self.target
         if start == goal:
             return []
-        frontier = [start]
-        came_from: dict[Tuple[int, int], Optional[Tuple[int, int]]] = {start: None}
-        while frontier:
-            x, y = frontier.pop(0)
-            if (x, y) == goal:
+
+        open_set: list[tuple[int, tuple[int, int]]] = []
+        heapq.heappush(open_set, (0, start))
+        came_from: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
+        g_score: dict[tuple[int, int], int] = {start: 0}
+
+        while open_set:
+            _, current = heapq.heappop(open_set)
+            if current == goal:
                 break
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
+                nx, ny = current[0] + dx, current[1] + dy
                 if not world.in_bounds(nx, ny):
-                    continue
-                if (nx, ny) in came_from:
                     continue
                 if not world.get_tile(nx, ny).walkable and (nx, ny) != goal:
                     continue
-                came_from[(nx, ny)] = (x, y)
-                frontier.append((nx, ny))
+                tentative_g = g_score[current] + 1
+                if tentative_g < g_score.get((nx, ny), float("inf")):
+                    came_from[(nx, ny)] = current
+                    g_score[(nx, ny)] = tentative_g
+                    priority = tentative_g + abs(goal[0] - nx) + abs(goal[1] - ny)
+                    heapq.heappush(open_set, (priority, (nx, ny)))
         else:
             return []
+
         cur = goal
         path_rev = []
         while cur != start:
             path_rev.append(cur)
-            cur = came_from[cur]
+            cur = came_from.get(cur)
             if cur is None:
                 break
         path_rev.reverse()
@@ -103,8 +111,7 @@ class MoveToAction(Action):
                 self.finished = True
         else:
             self._rebuild_path(entity, world)
-            if not self.path:
-                self.finished = True
+            self.finished = True
 
 
 class GatherAction(Action):
