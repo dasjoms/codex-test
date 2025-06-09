@@ -106,6 +106,8 @@ class Entity:
     current_action: Optional[Action] = None
     home_id: Optional[int] = None
     community_id: Optional[int] = None
+    last_plan_reason: str = ""
+    action_log: list[str] = field(default_factory=list)
 
     def remember(
         self,
@@ -364,12 +366,14 @@ class Entity:
                 ):
                     if storage.withdraw(Resource.WATER, 1):
                         self.inventory.add(Resource.WATER)
+                        self.last_plan_reason = "drinking from storage"
                         return ConsumeAction(Resource.WATER)
                 if self.needs.hunger >= 8:
                     for r in (Resource.MEAT, Resource.BERRIES):
                         if storage.inventory.get(r, 0) > 0:
                             if storage.withdraw(r, 1):
                                 self.inventory.add(r)
+                                self.last_plan_reason = "eating from storage"
                                 return ConsumeAction(r)
             else:
                 if (
@@ -379,6 +383,7 @@ class Entity:
                 ):
                     loc = self.adjacent_tile_for_building(world, storage)
                     if loc:
+                        self.last_plan_reason = "moving to storage for water"
                         return MoveToAction(target=loc)
                 if (
                     self.needs.hunger >= 8
@@ -393,9 +398,11 @@ class Entity:
                 ):
                     loc = self.adjacent_tile_for_building(world, storage)
                     if loc:
+                        self.last_plan_reason = "moving to storage for food"
                         return MoveToAction(target=loc)
 
         if self.needs.energy <= 20:
+            self.last_plan_reason = "resting due to low energy"
             return RestAction()
 
         if self.needs.health < 30:
@@ -403,16 +410,20 @@ class Entity:
                 self.needs.thirst > 5
                 and self.inventory.items.get(Resource.WATER, 0) > 0
             ):
+                self.last_plan_reason = "healing by drinking"
                 return ConsumeAction(Resource.WATER)
             for food in (Resource.MEAT, Resource.BERRIES):
                 if self.needs.hunger > 5 and self.inventory.items.get(food, 0) > 0:
+                    self.last_plan_reason = "healing by eating"
                     return ConsumeAction(food)
 
         if self.needs.thirst >= 8 and self.inventory.items.get(Resource.WATER, 0) > 0:
+            self.last_plan_reason = "drinking from inventory"
             return ConsumeAction(Resource.WATER)
         if self.needs.hunger >= 8:
             for food in (Resource.MEAT, Resource.BERRIES):
                 if self.inventory.items.get(food, 0) > 0:
+                    self.last_plan_reason = "eating from inventory"
                     return ConsumeAction(food)
 
         house_bp = Blueprint(
@@ -431,6 +442,7 @@ class Entity:
                 self.x, self.y, house_bp.width, house_bp.height
             )
         ):
+            self.last_plan_reason = "building a house"
             return BuildAction(house_bp, self.x, self.y)
 
         for site in world.construction_sites:
@@ -446,23 +458,29 @@ class Entity:
         if self.inventory.items.get(Resource.WOOD, 0) < 4:
             loc = self.remembered_adjacent_tile_for_resource(world, Resource.WOOD)
             if loc:
+                self.last_plan_reason = "seeking wood"
                 return MoveToAction(target=loc)
             target = self.nearest_unexplored_tile(world)
             if target:
+                self.last_plan_reason = "exploring for wood"
                 return MoveToAction(target=target)
             explore = self.step_toward_unexplored(world)
             if explore:
+                self.last_plan_reason = "moving toward unexplored for wood"
                 return explore
 
         if self.needs.thirst >= 8 and self.inventory.items.get(Resource.WATER, 0) == 0:
             loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
             if loc:
+                self.last_plan_reason = "seeking water source"
                 return MoveToAction(target=loc)
             target = self.nearest_unexplored_tile(world)
             if target:
+                self.last_plan_reason = "exploring for water"
                 return MoveToAction(target=target)
             explore = self.step_toward_unexplored(world)
             if explore:
+                self.last_plan_reason = "moving toward unexplored for water"
                 return explore
 
         if self.needs.hunger >= 8 and not any(
@@ -472,19 +490,24 @@ class Entity:
             for res in (Resource.ANIMAL, Resource.BERRY_BUSH):
                 loc = self.remembered_adjacent_tile_for_resource(world, res)
                 if loc:
+                    self.last_plan_reason = "hunting/gathering food"
                     return MoveToAction(target=loc)
             target = self.nearest_unexplored_tile(world)
             if target:
+                self.last_plan_reason = "exploring for food"
                 return MoveToAction(target=target)
             explore = self.step_toward_unexplored(world)
             if explore:
+                self.last_plan_reason = "moving toward unexplored for food"
                 return explore
 
         if self.needs.loneliness >= 8:
             dx, dy = random.choice(directions)
+            self.last_plan_reason = "wandering due to loneliness"
             return MoveAction(dx, dy)
 
         dx, dy = random.choice(directions)
+        self.last_plan_reason = "wandering randomly"
         return MoveAction(dx, dy)
 
     def can_reproduce(
@@ -534,7 +557,11 @@ class Entity:
         return child
 
     def take_turn(
-        self, world: World, occupied: Set[Tuple[int, int]] | None = None
+        self,
+        world: World,
+        occupied: Set[Tuple[int, int]] | None = None,
+        *,
+        tick: int = 0,
     ) -> None:
         """Update needs, decide on an action, and perform it."""
 
@@ -581,6 +608,10 @@ class Entity:
         if self.current_action is None or self.current_action.finished:
             self.current_action = self.plan_action(world)
             self.current_action.start(self, world)
+            entry = f"t{tick}: {self.current_action.__class__.__name__} - {self.last_plan_reason}"
+            self.action_log.append(entry)
+            if len(self.action_log) > 20:
+                self.action_log.pop(0)
 
         self.current_action.step(self, world, occupied)
         self.remember(self.x, self.y, visited=True)
