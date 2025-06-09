@@ -6,7 +6,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
-from .world import World, Resource, Tile, Building, Blueprint
+from .world import World, Resource, Tile, Building, Blueprint, Biome
 from .community import Community
 from .actions import (
     Action,
@@ -183,7 +183,10 @@ class Entity:
             if not world.in_bounds(x, y):
                 continue
             tile = world.get_tile(x, y)
-            if resource in tile.resources:
+            if resource is Resource.WATER:
+                if tile.biome is Biome.WATER or resource in tile.resources:
+                    return x, y
+            elif resource in tile.resources:
                 return x, y
         return None
 
@@ -196,7 +199,10 @@ class Entity:
             if not world.in_bounds(x, y):
                 continue
             tile = world.get_tile(x, y)
-            if resource not in tile.resources:
+            has_resource = resource in tile.resources
+            if resource is Resource.WATER:
+                has_resource = has_resource or tile.biome is Biome.WATER
+            if not has_resource:
                 continue
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 nx, ny = x + dx, y + dy
@@ -250,13 +256,16 @@ class Entity:
             if not world.in_bounds(nx, ny):
                 continue
             t = world.get_tile(nx, ny)
-            if t.resources:
+            if t.resources or t.biome is Biome.WATER:
                 sources.append((t, (nx, ny)))
         if not sources:
             return
 
         tile, _ = random.choice(sources)
-        res = random.choice(list(tile.resources.keys()))
+        res_choices = list(tile.resources.keys())
+        if tile.biome is Biome.WATER:
+            res_choices.append(Resource.WATER)
+        res = random.choice(res_choices)
         if res is not Resource.WATER:
             tile.resources[res] -= 1
             if tile.resources[res] <= 0:
@@ -454,8 +463,15 @@ class Entity:
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         for dx, dy in directions:
             nx, ny = self.x + dx, self.y + dy
-            if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
-                resources = world.get_tile(nx, ny).resources
+            if not world.in_bounds(nx, ny):
+                continue
+            tile = world.get_tile(nx, ny)
+            if tile.resources or tile.biome is Biome.WATER:
+                resources = dict(tile.resources)
+                if tile.biome is Biome.WATER:
+                    resources[Resource.WATER] = resources.get(Resource.WATER, 1)
+                if list(resources.keys()) == [Resource.WATER] and self.needs.thirst < 8:
+                    continue
                 if Resource.WOOD in resources:
                     if self.inventory.items.get(
                         Resource.WOOD, 0
