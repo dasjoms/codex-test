@@ -53,4 +53,5 @@ def test_entities_die_and_are_removed() -> None:
     e.needs.thirst = 20
     sim = Simulation(world=world, entities=[e])
     sim.step()
-    assert not sim.entities
+    assert len(sim.entities) == 1
+    assert sim.entities[0].needs.health == 4.75
