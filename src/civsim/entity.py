@@ -212,6 +212,32 @@ class Entity:
         elif resource is Resource.MEAT:
             self.needs.hunger = max(0, self.needs.hunger - 7)
 
+    def step_toward_unexplored(self, world: World) -> MoveAction | None:
+        """Return a move action biased toward unexplored territory."""
+
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        best: tuple[int, int] | None = None
+        best_distance = -1
+        for dx, dy in directions:
+            if not world.in_bounds(self.x + dx, self.y + dy):
+                continue
+            if not world.get_tile(self.x + dx, self.y + dy).walkable:
+                continue
+            dist = 1
+            nx, ny = self.x + dx, self.y + dy
+            while world.in_bounds(nx, ny) and (nx, ny) in self.memory:
+                nx += dx
+                ny += dy
+                dist += 1
+            if not world.in_bounds(nx, ny):
+                continue
+            if dist > best_distance:
+                best_distance = dist
+                best = (dx, dy)
+        if best is not None:
+            return MoveAction(*best)
+        return None
+
     def rest(self) -> None:
         """Recover energy while increasing hunger and thirst."""
 
@@ -249,9 +275,9 @@ class Entity:
                 if self.needs.hunger > 5 and self.inventory.items.get(food, 0) > 0:
                     return ConsumeAction(food)
 
-        if self.needs.thirst >= 12 and self.inventory.items.get(Resource.WATER, 0) > 0:
+        if self.needs.thirst >= 8 and self.inventory.items.get(Resource.WATER, 0) > 0:
             return ConsumeAction(Resource.WATER)
-        if self.needs.hunger >= 12:
+        if self.needs.hunger >= 8:
             for food in (Resource.MEAT, Resource.BERRIES):
                 if self.inventory.items.get(food, 0) > 0:
                     return ConsumeAction(food)
@@ -284,12 +310,15 @@ class Entity:
             if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
                 return GatherAction()
 
-        if self.needs.thirst >= 50 and self.inventory.items.get(Resource.WATER, 0) == 0:
+        if self.needs.thirst >= 15 and self.inventory.items.get(Resource.WATER, 0) == 0:
             loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
             if loc:
                 return MoveToAction(target=loc)
+            explore = self.step_toward_unexplored(world)
+            if explore:
+                return explore
 
-        if self.needs.hunger >= 50 and not any(
+        if self.needs.hunger >= 15 and not any(
             self.inventory.items.get(res, 0) > 0
             for res in (Resource.MEAT, Resource.BERRIES)
         ):
@@ -297,6 +326,9 @@ class Entity:
                 loc = self.remembered_adjacent_tile_for_resource(world, res)
                 if loc:
                     return MoveToAction(target=loc)
+            explore = self.step_toward_unexplored(world)
+            if explore:
+                return explore
 
         if self.needs.loneliness >= 8:
             dx, dy = random.choice(directions)
