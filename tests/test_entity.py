@@ -23,8 +23,8 @@ def test_entity_needs_update_and_rest() -> None:
     entity.needs.energy = 1
 
     entity.take_turn(world)
-    assert entity.needs.hunger == 2
-    assert entity.needs.thirst == 2
+    assert entity.needs.hunger == 1.0
+    assert entity.needs.thirst == 1.0
     assert entity.needs.energy == 20  # rested when energy depleted
 
 
@@ -85,7 +85,7 @@ def test_entity_moves_to_remembered_resource() -> None:
 
     e = Entity(id=1, x=0, y=0)
     e.memory.update({(0, 0), (1, 0), (2, 0)})
-    e.needs.hunger = 15
+    e.needs.hunger = 55
 
     for _ in range(2):
         e.take_turn(world)

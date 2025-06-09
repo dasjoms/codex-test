@@ -206,8 +206,8 @@ class Entity:
         """Recover energy while increasing hunger and thirst."""
 
         self.needs.energy = min(100, self.needs.energy + 20)
-        self.needs.hunger += 1
-        self.needs.thirst += 1
+        self.needs.hunger += 0.5
+        self.needs.thirst += 0.5
         self.needs.morale = min(100, self.needs.morale + 1)
 
     def add_relationship(self, other: "Entity", kind: str) -> None:
@@ -244,12 +244,15 @@ class Entity:
             if world.in_bounds(nx, ny) and world.get_tile(nx, ny).resources:
                 return GatherAction()
 
-        if self.needs.thirst >= 8:
+        if self.needs.thirst >= 50 and self.inventory.items.get(Resource.WATER, 0) == 0:
             loc = self.remembered_adjacent_tile_for_resource(world, Resource.WATER)
             if loc:
                 return MoveToAction(target=loc)
 
-        if self.needs.hunger >= 8:
+        if self.needs.hunger >= 50 and not any(
+            self.inventory.items.get(res, 0) > 0
+            for res in (Resource.MEAT, Resource.BERRIES)
+        ):
             for res in (Resource.ANIMAL, Resource.BERRY_BUSH):
                 loc = self.remembered_adjacent_tile_for_resource(world, res)
                 if loc:
@@ -317,8 +320,8 @@ class Entity:
             occupied = set()
 
         self.age += 1
-        self.needs.hunger += 1
-        self.needs.thirst += 1
+        self.needs.hunger += 0.5
+        self.needs.thirst += 0.5
         self.needs.energy -= 1
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         if any((self.x + dx, self.y + dy) in occupied for dx, dy in directions):
@@ -333,12 +336,6 @@ class Entity:
             regen += 1
         if regen:
             self.needs.health = min(self.needs.max_health, self.needs.health + regen)
-        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-        if any((self.x + dx, self.y + dy) in occupied for dx, dy in directions):
-            self.needs.loneliness = max(0, self.needs.loneliness - 2)
-        else:
-            self.needs.loneliness += 1
-
         self.memory.add((self.x, self.y))
         self.perceive(world)
 
