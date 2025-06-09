@@ -1,4 +1,5 @@
 from civsim.entity import Entity
+from civsim.actions import MoveAction
 from civsim.simulation import Simulation
 from civsim.world import World
 
@@ -53,4 +54,15 @@ def test_entities_die_and_are_removed() -> None:
     e.needs.thirst = 20
     sim = Simulation(world=world, entities=[e])
     sim.step()
-    assert not sim.entities
+    assert len(sim.entities) == 1
+    assert sim.entities[0].needs.health == 4.75
+
+
+def test_seek_unexplored_when_no_known_resources() -> None:
+    world = World(width=5, height=5, seed=1)
+    e = Entity(id=0, x=2, y=2)
+    e.needs.hunger = 15
+    action = e.plan_action(world)
+    assert isinstance(action, MoveAction)
+    nx, ny = e.x + action.dx, e.y + action.dy
+    assert (nx, ny) not in e.memory
