@@ -7,7 +7,7 @@ from typing import Optional
 
 from .simulation import Simulation
 from .entity import Entity
-from .world import Biome, Resource
+from .colors import BIOME_COLORS, RESOURCE_COLORS
 
 
 class SimulationUI:
@@ -122,41 +122,8 @@ class SimulationUI:
         self.canvas.delete("all")
         world = self.sim.world
         ts = self.tile_size
-        colors = {
-            Biome.PLAINS: "#a4c689",
-            Biome.FOREST: "#228b22",
-            Biome.DESERT: "#e0c469",
-            Biome.WATER: "#1e90ff",
-            Biome.MOUNTAIN: "#888888",
-        }
-        res_colors = {
-            Resource.WOOD: "#8b4513",
-            Resource.STONE: "#808080",
-            Resource.CLAY: "#b5651d",
-            Resource.WATER: "#00bfff",
-            Resource.BERRY_BUSH: "#ff6347",
-            Resource.ANIMAL: "#fafad2",
-            Resource.BERRIES: "#ff9999",
-            Resource.MEAT: "#cd5c5c",
-            Resource.IRON: "#b0b0b0",
-            Resource.COPPER: "#b87333",
-            Resource.GOLD: "#ffd700",
-            Resource.COAL: "#2f4f4f",
-        }
-        res_colors = {
-            Resource.WOOD: "#8b4513",
-            Resource.STONE: "#808080",
-            Resource.CLAY: "#b5651d",
-            Resource.WATER: "#00bfff",
-            Resource.BERRY_BUSH: "#ff6347",
-            Resource.ANIMAL: "#fafad2",
-            Resource.BERRIES: "#ff9999",
-            Resource.MEAT: "#cd5c5c",
-            Resource.IRON: "#b0b0b0",
-            Resource.COPPER: "#b87333",
-            Resource.GOLD: "#ffd700",
-            Resource.COAL: "#2f4f4f",
-        }
+        colors = BIOME_COLORS
+        res_colors = RESOURCE_COLORS
         for y in range(world.height):
             for x in range(world.width):
                 tile = world.tiles[y][x]
@@ -211,7 +178,7 @@ class SimulationUI:
                         width=1,
                     )
         if self.show_memory.get():
-            for mx, my in ent.memory:
+            for mx, my in ent.memory.keys():
                 if world.in_bounds(mx, my):
                     self.canvas.create_rectangle(
                         mx * ts,

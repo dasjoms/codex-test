@@ -139,6 +139,7 @@ class World:
         resource_scale: int = 8,
         region_size: int = 32,
         climate_scale: int = 10,
+        ensure_starting_resources: bool = True,
     ) -> None:
         self.width = width
         self.height = height
@@ -269,6 +270,9 @@ class World:
                     tile.resources[res_type] = tile.resources.get(res_type, 0) + amount
                     tile.walkable = False
 
+        if ensure_starting_resources:
+            self._ensure_starting_resources(rng)
+
     def in_bounds(self, x: int, y: int) -> bool:
         """Return True if the coordinates are inside the map."""
 
@@ -324,19 +328,19 @@ class World:
 
         distribution = {
             Biome.FOREST: [
-                (Resource.WOOD, 0.9),
-                (Resource.ANIMAL, 0.3),
+                (Resource.WOOD, 0.8),
+                (Resource.ANIMAL, 0.6),
                 (Resource.STONE, 0.1),
                 (None, 0.2),
             ],
             Biome.PLAINS: [
-                (Resource.BERRY_BUSH, 0.3),
+                (Resource.BERRY_BUSH, 0.6),
                 (Resource.WATER, 0.2),
-                (Resource.ANIMAL, 0.2),
+                (Resource.ANIMAL, 0.5),
                 (Resource.WOOD, 0.1),
                 (Resource.STONE, 0.1),
                 (Resource.IRON, 0.05),
-                (None, 0.3),
+                (None, 0.2),
             ],
             Biome.DESERT: [
                 (Resource.STONE, 0.4),
@@ -391,6 +395,30 @@ class World:
         }
         low, high = ranges.get(res, (1, 3))
         return rng.randint(low, high)
+
+    def _ensure_starting_resources(self, rng: random.Random) -> None:
+        """Place essential resources near the center if missing."""
+
+        center_x = self.width // 2
+        center_y = self.height // 2
+        radius = 2
+
+        def _place(res: Resource) -> None:
+            for _ in range(100):
+                x = max(0, min(self.width - 1, center_x + rng.randint(-radius, radius)))
+                y = max(
+                    0, min(self.height - 1, center_y + rng.randint(-radius, radius))
+                )
+                tile = self.tiles[y][x]
+                if tile.walkable:
+                    tile.resources[res] = tile.resources.get(res, 0) + 1
+                    tile.walkable = False
+                    break
+
+        for _ in range(2):
+            _place(Resource.WATER)
+            _place(Resource.BERRY_BUSH)
+            _place(Resource.ANIMAL)
 
     def tick_regrowth(self) -> None:
         """Advance resource regrowth timers and restore resources."""
